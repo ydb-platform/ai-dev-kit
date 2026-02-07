@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>skills.ydb.sh</title>
+<style>
+:root{color-scheme:light dark;--bg:light-dark(#f8f8f8,#292a30);--fg:light-dark(#3d3d3d,#cecece);--dm:light-dark(#9f9fa6,#6c6e75);--hl:light-dark(#0068da,#65b5f6);--ok:light-dark(#448c27,#8bc879)}
+*{margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);font:14px/1.6 'SF Mono','Cascadia Code','JetBrains Mono','Fira Code',Consolas,Menlo,monospace;min-width:80ch;max-width:80ch;margin:0 auto;padding:3rem 1ch;white-space:pre;overflow-x:auto}
+b,i,em{font:inherit}i{color:var(--dm)}b{color:var(--hl)}em{color:var(--ok)}
+a{color:var(--hl);text-decoration:none;&:hover{text-decoration:underline}}
+.cp{cursor:pointer;background:0;border:0;color:var(--dm);font:inherit;font-size:12px;vertical-align:middle;&:hover{color:var(--fg)}}
+.ln{display:flex;>:last-child{margin-inline-start:auto}}
+</style>
+</head>
+<!-- @formatter:off -->
+<body>
+<div class="ln"><i>YDB Skills</i><i>{{version}}</i></div>
+AI agent skills for YDB database.
+SDK review, SQL assistance, DevOps guidance.
+
+<i>INSTALL</i>
+
+<div class="ln">  $ <em>curl -fsSL https://skills.ydb.sh{{versionPath}} | sh</em><button class="cp" onclick="navigator.clipboard.writeText('curl -fsSL https://skills.ydb.sh{{versionPath}} | sh').then(()=>{this.textContent='ok';setTimeout(()=>this.textContent='copy',1200)})">copy</button></div>
+<i>SKILLS</i>
+
+  <b>ydb-sdk</b>   SDK usage review — anti-patterns, best practices
+            Go, Python, Java, C++, C#, Terraform, CLI
+  <b>ydb-sql</b>   YQL/SQL — query writing, optimization, schema design
+  <b>ydb-ops</b>   DevOps — deployment, monitoring, troubleshooting
+
+<i>AGENTS</i>
+
+  Claude Code   Cursor      Windsurf   GitHub Copilot
+  Codex CLI     Gemini CLI  Amp        Roo Code
+  Kiro          Trae        <i>+ any SKILL.md compatible</i>
+
+<i>USAGE</i>
+
+<div class="ln">  $ <em>curl -fsSL https://skills.ydb.sh | sh</em><i>auto-detect</i></div><div class="ln">  $ <em>curl ... | sh -s -- --agent=claude</em><i>specific agent</i></div><div class="ln">  $ <em>curl ... | sh -s -- --agent=claude --global</em><i>global install</i></div><div class="ln">  $ <em>curl ... | sh -s -- --all</em><i>all agents</i></div>
+<div class="ln">  $ <em>git clone https://github.com/ydb-platform/skills</em><i>from source</i></div>  $ <em>cd skills && ./install.sh --detect</em>
+
+<i>—</i>
+<a href="https://github.com/ydb-platform/skills">github</a> <i>·</i> <a href="https://ydb.tech">ydb.tech</a> <i>·</i> <a href="https://agentskills.io">agentskills.io</a>
+</body>
+</html>
