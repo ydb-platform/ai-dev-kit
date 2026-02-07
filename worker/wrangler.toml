@@ -10,6 +10,6 @@ fallthrough = false
 [vars]
 GITHUB_REPO = "ydb-platform/skills"
 
-routes = [
-  { pattern = "skills.ydb.sh", custom_domain = true }
-]
+[[routes]]
+pattern = "skills.ydb.sh"
+custom_domain = true
