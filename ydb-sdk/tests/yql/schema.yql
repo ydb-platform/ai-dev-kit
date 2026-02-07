@@ -1,0 +1,67 @@
+-- User events table with auto-increment PK
+CREATE TABLE user_events (
+    id Uint64,
+    user_id Uint64,
+    event_type Utf8,
+    payload Json,
+    created_at Timestamp,
+    PRIMARY KEY (id)
+) WITH (
+    AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 1,
+    AUTO_PARTITIONING_BY_LOAD = DISABLED
+);
+
+-- Orders table without partitioning settings
+CREATE TABLE orders (
+    order_id Uint64,
+    user_id Uint64,
+    product_id Uint64,
+    status Utf8,
+    total Decimal(22, 9),
+    created_at Timestamp,
+    updated_at Timestamp,
+    PRIMARY KEY (order_id)
+);
+
+-- Audit log with timestamp-first PK
+CREATE TABLE audit_log (
+    created_at Timestamp,
+    action_id Uint64,
+    user_id Uint64,
+    action Utf8,
+    details Json,
+    PRIMARY KEY (created_at, action_id)
+);
+
+-- Users table with secondary index but no covering columns
+CREATE TABLE users (
+    id Uint64,
+    login Utf8,
+    name Utf8,
+    email Utf8,
+    balance Int64,
+    status Utf8,
+    created_at Timestamp,
+    PRIMARY KEY (id),
+    INDEX idx_email GLOBAL ON (email),
+    INDEX idx_login GLOBAL ON (login),
+    INDEX idx_status GLOBAL ON (status)
+);
+
+-- Queries with anti-patterns
+
+-- Search by prefix using LIKE
+SELECT * FROM users WHERE email LIKE 'admin%';
+
+-- Missing VIEW hint for index
+SELECT name, email FROM users WHERE login = 'john_doe';
+
+-- Missing ORDER BY when pagination depends on order
+SELECT * FROM orders WHERE user_id = 42 LIMIT 20 OFFSET 40;
+
+-- Non-parametrized query embedded in YQL script
+SELECT * FROM orders WHERE status = 'pending' AND total > 1000;
+
+-- DECLARE with potential EmptyList issue
+DECLARE $userIds AS List<Uint64>;
+SELECT * FROM users WHERE id IN $userIds;
