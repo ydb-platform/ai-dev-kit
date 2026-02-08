@@ -1,0 +1,10 @@
+{
+  "name": "ydb",
+  "version": "0.2.0",
+  "description": "YDB database skills: SDK code review, SQL assistance, DevOps guidance",
+  "author": { "name": "YDB Platform", "url": "https://github.com/ydb-platform" },
+  "homepage": "https://ai.ydb.sh",
+  "repository": "https://github.com/ydb-platform/ai-dev-kit",
+  "license": "Apache-2.0",
+  "keywords": ["ydb", "database", "sdk", "yql", "devops", "code-review"]
+}
