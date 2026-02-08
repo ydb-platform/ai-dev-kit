@@ -1,4 +1,4 @@
-// Cloudflare Worker for skills.ydb.sh
+// Cloudflare Worker for ai.ydb.sh
 //
 // Routing:
 //   GET /                      → install.sh (CLI) or landing page (browser)

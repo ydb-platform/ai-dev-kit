@@ -6,8 +6,8 @@ set -euo pipefail
 # Supports: Claude Code, Cursor, Windsurf, GitHub Copilot, Codex CLI,
 #           Roo Code, Gemini CLI, Amp, Kiro, Trae, and generic .agents/.
 
-REPO_URL="https://github.com/ydb-platform/skills"
-VERSION="0.1.0"
+REPO_URL="https://github.com/ydb-platform/ai-dev-kit"
+VERSION="0.2.0"
 
 # ── Colors ──────────────────────────────────────────────────────────────────
 
@@ -80,10 +80,10 @@ ${BOLD}Examples:${NC}
   $(basename "$0") --all --skills=ydb-sdk
 
   # Remote install (auto-detect agents)
-  curl -fsSL https://skills.ydb.sh | sh
+  curl -fsSL https://ai.ydb.sh | sh
 
   # Remote install with specific agent
-  curl -fsSL https://skills.ydb.sh | sh -s -- --agent=claude
+  curl -fsSL https://ai.ydb.sh | sh -s -- --agent=claude
 
 EOF
 }
@@ -169,7 +169,7 @@ resolve_source() {
   fi
 
   # Check if running from the repo (local install)
-  if [[ -n "$script_dir" && -f "${script_dir}/ydb-sdk/SKILL.md" ]]; then
+  if [[ -n "$script_dir" && -f "${script_dir}/skills/ydb-sdk/SKILL.md" ]]; then
     echo "local:${script_dir}"
     return 0
   fi
@@ -207,7 +207,7 @@ install_skill() {
   local method="$4"  # link or copy
   local dry_run="$5"
 
-  local skill_source="${source_dir}/${skill}"
+  local skill_source="${source_dir}/skills/${skill}"
   local skill_target="${target_dir}/${skill}"
 
   if [[ ! -d "$skill_source" ]]; then
@@ -385,8 +385,8 @@ main() {
   # ── Validate skills ─────────────────────────────────────────────────────
 
   for skill in "${install_skills[@]}"; do
-    if [[ ! -d "${source_path}/${skill}" ]]; then
-      log_err "Skill not found: ${skill} (in ${source_path})"
+    if [[ ! -d "${source_path}/skills/${skill}" ]]; then
+      log_err "Skill not found: ${skill} (in ${source_path}/skills/)"
       exit 1
     fi
   done
