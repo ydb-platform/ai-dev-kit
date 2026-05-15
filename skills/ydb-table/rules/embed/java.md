@@ -17,3 +17,23 @@ List<Token> tokens = repository.findAllById(ids);
 ```
 
 **Source**: Spring Data Commons — `CrudRepository#findAllById(Iterable<ID>)` (returns all instances of the type with the given ids in a single call). <https://docs.spring.io/spring-data/commons/docs/current/api/org/springframework/data/repository/CrudRepository.html>.
+
+### RULE-JV-02: JDBC batching not configured
+
+**Severity**: High
+
+**What to look for**: `application.properties` / `application.yml` files without `spring.jpa.properties.hibernate.jdbc.batch_size`, or Hibernate `persistence.xml` / `hibernate.cfg.xml` without `hibernate.jdbc.batch_size`. Also missing `hibernate.order_inserts` / `hibernate.order_updates`.
+
+**Problem**: Hibernate's default JDBC batch size is 1 — every `INSERT` / `UPDATE` / `DELETE` is a separate statement and a separate network round trip. On write-heavy paths this multiplies cost.
+
+**Fix**:
+
+```properties
+spring.jpa.properties.hibernate.jdbc.batch_size=1000
+spring.jpa.properties.hibernate.order_inserts=true
+spring.jpa.properties.hibernate.order_updates=true
+```
+
+Batches form only when both batch size and ordering are enabled — without `order_inserts` / `order_updates`, the session can't group like statements together. The upstream `ydb-token-app` example (`ydb-java-examples/jdbc/ydb-token-app/src/main/resources/application.properties`) uses `batch_size=1000`.
+
+**Source**: Hibernate user guide — JDBC batching configuration. <https://docs.hibernate.org/orm/6.6/userguide/html_single/#batch>. YDB JDBC driver examples: <https://github.com/ydb-platform/ydb-jdbc-driver>.
