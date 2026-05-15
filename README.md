@@ -1,50 +1,17 @@
 # YDB Skills
 
-AI coding agent skills for [YDB](https://ydb.tech) — SDK code review, SQL/YQL assistance, and DevOps guidance.
+AI coding agent skills for [YDB](https://ydb.tech) — for writing YQL, designing schemas, and reviewing Java application code against YDB. Skills auto-trigger based on context.
+
+> **Status:** framework and scaffolding. Skill bodies are intentionally thin — content is migrated surface-by-surface, grounded in live YDB SDK source and upstream docs. See [`TODO.md`](TODO.md) for deferred work.
 
 ## What's Inside
 
-| Skill | Description |
-|-------|-------------|
-| **ydb-sdk** | Review code using YDB SDK for anti-patterns, performance issues, and incorrect usage. Covers Go, Python, Java, C++, C#, Terraform, CLI. |
-| **ydb-sql** | Help write, optimize, and debug YQL/SQL queries. Schema design, SQL-to-YQL conversion. |
-| **ydb-ops** | DevOps guidance: deployment, configuration, monitoring, troubleshooting. |
+| Skill                | Scope                                                                                                                                                 |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **ydb-core**         | Entry point / router. YDB overview, auth and connection, schema basics, admin CLI. Baseline skill — auto-installed alongside any other.               |
+| **ydb-table**        | Writing YQL and executing it (SDK-embedded, `ydb sql` / `ydb yql` CLI). Optimization, schema design for query patterns, SQL-to-YQL conversion, audit. |
 
 ## Installation
-
-### Claude Code (plugin)
-
-Install as a Claude Code plugin for the full experience (skills + agents + slash commands):
-
-```bash
-claude plugin add https://github.com/ydb-platform/ai-dev-kit
-```
-
-This gives you:
-- 3 auto-triggering skills
-- 3 specialized agents (ydb-sdk, ydb-sql, ydb-ops)
-- Slash commands: `/review`, `/sql`, `/ops`
-
-### Any Coding Agent (universal installer)
-
-Install skills for any supported agent using the installer script:
-
-```bash
-# Remote install — auto-detect agents
-curl -fsSL https://ai.ydb.sh | bash
-
-# Install for a specific agent
-curl -fsSL https://ai.ydb.sh | bash -s -- --agent=cursor
-
-# Install for multiple agents
-curl -fsSL https://ai.ydb.sh | bash -s -- --agent=claude,copilot,gemini
-
-# Install globally (user-level)
-curl -fsSL https://ai.ydb.sh | bash -s -- --agent=claude --global
-
-# See all options
-curl -fsSL https://ai.ydb.sh | bash -s -- --help
-```
 
 ### Local install (from cloned repo)
 
@@ -56,100 +23,108 @@ cd ai-dev-kit
 ./install.sh --detect
 
 # Install for specific agent
-./install.sh --agent=cursor
+./install.sh --agent=claude
+
+# Install only ydb-table (ydb-core auto-included as baseline)
+./install.sh --agent=claude --skills=ydb-table
+
+# Install only ydb-table without the baseline
+./install.sh --agent=claude --skills=ydb-table --no-core
 
 # Dry run — see what would be done
 ./install.sh --agent=claude --dry-run
 ```
 
+### Remote install
+
+```bash
+# Auto-detect agents
+curl -fsSL https://ai.ydb.sh | bash
+
+# Specific agent
+curl -fsSL https://ai.ydb.sh | bash -s -- --agent=cursor
+
+# Multiple agents
+curl -fsSL https://ai.ydb.sh | bash -s -- --agent=claude,copilot,gemini
+
+# Global (user-level)
+curl -fsSL https://ai.ydb.sh | bash -s -- --agent=claude --global
+
+# All options
+curl -fsSL https://ai.ydb.sh | bash -s -- --help
+```
+
 ### Supported Agents
 
-| Agent | Project dir | Global dir |
-|-------|-------------|------------|
-| Claude Code | `.claude/skills/` | `~/.claude/skills/` |
-| Cursor | `.cursor/skills/` | — |
-| Windsurf | `.windsurf/skills/` | — |
-| GitHub Copilot | `.github/skills/` | `~/.copilot/skills/` |
-| Codex CLI | `.agents/skills/` | `~/.codex/skills/` |
-| Roo Code | `.roo/skills/` | — |
-| Gemini CLI | `.gemini/skills/` | `~/.gemini/skills/` |
-| Amp | `.agents/skills/` | `~/.config/agents/skills/` |
-| Kiro | `.kiro/skills/` | — |
-| Trae | `.trae/skills/` | — |
-| Generic | `.agents/skills/` | `~/.agents/skills/` |
+| Agent          | Project dir         | Global dir                 |
+| -------------- | ------------------- | -------------------------- |
+| Claude Code    | `.claude/skills/`   | `~/.claude/skills/`        |
+| Cursor         | `.cursor/skills/`   | —                          |
+| Windsurf       | `.windsurf/skills/` | —                          |
+| GitHub Copilot | `.github/skills/`   | `~/.copilot/skills/`       |
+| Codex CLI      | `.agents/skills/`   | `~/.codex/skills/`         |
+| Roo Code       | `.roo/skills/`      | —                          |
+| Gemini CLI     | `.gemini/skills/`   | `~/.gemini/skills/`        |
+| Amp            | `.agents/skills/`   | `~/.config/agents/skills/` |
+| Kiro           | `.kiro/skills/`     | —                          |
+| Trae           | `.trae/skills/`     | —                          |
+| Generic        | `.agents/skills/`   | `~/.agents/skills/`        |
 
 ## Usage
 
-### Claude Code Plugin
-
-After installing the plugin, skills trigger automatically based on context:
+Skills trigger automatically from the user's phrasing. Examples of queries that route to each skill:
 
 ```
-> Review my Go code that uses ydb-go-sdk
-  → triggers ydb-sdk skill
+> What is YDB and how do I connect to it from Go?
+  → ydb-core
 
-> Help me write a YQL query to get users by date range
-  → triggers ydb-sql skill
+> Write a YQL query to paginate users by created_at
+  → ydb-table
 
-> How do I set up YDB monitoring with Prometheus?
-  → triggers ydb-ops skill
+> Review this Java/Hibernate code that calls saveAll in a loop
+  → ydb-table (audit mode)
 ```
 
-Slash commands for explicit invocation:
-
-```
-> /review src/db/
-> /sql write a query to get active users with pagination
-> /ops how to do a rolling restart
-```
-
-### Other Agents
-
-After installing with `install.sh`, reference the skill in your prompt:
-
-```
-Review this code for YDB anti-patterns using the ydb-sdk skill.
-```
-
-The agent will load `SKILL.md` and follow the review workflow using reference files.
+For agents that don't auto-trigger skills, reference the skill name explicitly in the prompt.
 
 ## Repository Structure
 
 ```
-.claude-plugin/plugin.json    # Claude Code plugin manifest
-agents/                        # Agent definitions (Claude Code)
-  ydb-sdk.md                   # SDK code reviewer
-  ydb-sql.md                   # SQL/YQL assistant
-  ydb-ops.md                   # DevOps advisor
-commands/                      # Slash commands (Claude Code)
-  review.md                    # /review — SDK code review
-  sql.md                       # /sql — YQL/SQL help
-  ops.md                       # /ops — DevOps guidance
-skills/                        # Skills (universal)
-  ydb-sdk/
-    SKILL.md                   # Review workflow
-    references/                # 16 reference files (Go, Python, Java, C++, C#, Terraform, CLI)
-    tests/                     # Test fixtures with intentionally bad code
-  ydb-sql/
-    SKILL.md                   # Query assistance workflow
-    references/                # YQL syntax, optimization, schema design, SQL conversion
-  ydb-ops/
-    SKILL.md                   # Operations workflow
-    references/                # Deployment, config, monitoring, troubleshooting
-install.sh                     # Universal installer for all coding agents
+skills/                          Surface-aligned skills (universal format)
+  ydb-core/SKILL.md              Single-file router — overview, auth, schema basics, admin CLI
+  ydb-table/                     SKILL.md + references/ + rules/
+promptfooconfig.yaml             Compatibility matrix config — provider list, test discovery
+prompts/coding-agent.yaml        Shared system prompt for all tests
+tests/                           Test cases per skill (YAML, one per file)
+agents/grader.md                 Reference grader prompt (from anthropics/skills)
+docs/
+  authoring.md                   How to write a skill — structure, conventions, review checklist
+  testing.md                     How to run the compatibility matrix with promptfoo
+  templates/                     Copy-paste skeletons for SKILL.md, references, rules
+install.sh                       Universal installer
+TODO.md                          Deferred work: ydb-ops, content migration, runtime-level testing
 ```
 
-## Supported Languages (ydb-sdk)
+## Testing
 
-| Language | SDK | References |
-|----------|-----|------------|
-| Go | ydb-go-sdk | driver, query, topics |
-| Python | ydb-python-sdk | driver, query, topics |
-| Java | ydb-java-sdk / JDBC | driver, query, topics |
-| C++ | ydb-cpp-sdk | driver, query |
-| C# | Ydb.Sdk / ADO.NET | query |
-| Terraform | yandex_ydb_table | HCL resources |
-| CLI | ydb commands | shell scripts |
+A compatibility matrix built with [promptfoo](https://www.promptfoo.dev). Each `(provider, model)` pair runs every test; the grader scores each result via `llm-rubric`. Identifies the minimum model per vendor family that still works.
+
+Quick run:
+
+```bash
+export OPENROUTER_API_BASE_URL="..."
+export OPENROUTER_API_KEY="..."
+npx promptfoo@latest eval
+npx promptfoo@latest view
+```
+
+All providers route through one OpenAI-compatible endpoint. Default model set skews toward enterprise-deployed open-source (Qwen, DeepSeek, Mistral, Llama, GLM, Kimi) with one baseline per major cloud vendor (Anthropic, Google, OpenAI, xAI).
+
+Details — adding tests, adding models, reading the matrix, known gaps — in [`docs/testing.md`](docs/testing.md).
+
+## Contributing
+
+Read [`docs/authoring.md`](docs/authoring.md) before adding content. The short version: stay grounded in upstream YDB SDK source, don't invent rules from memory, one `RULE-<PREFIX>-<NN>` prefix per category claimed in the registry on first use, keep SKILL.md bodies short.
 
 ## License
 

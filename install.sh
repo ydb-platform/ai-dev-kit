@@ -2,12 +2,12 @@
 set -euo pipefail
 
 # YDB Skills Installer
-# Installs YDB skills (ydb-sdk, ydb-sql, ydb-ops) for AI coding agents.
-# Supports: Claude Code, Cursor, Windsurf, GitHub Copilot, Codex CLI,
-#           Roo Code, Gemini CLI, Amp, Kiro, Trae, and generic .agents/.
+# Installs YDB skills (ydb-core, ydb-table) for
+# AI coding agents. Supports: Claude Code, Cursor, Windsurf, GitHub Copilot,
+# Codex CLI, Roo Code, Gemini CLI, Amp, Kiro, Trae, and generic .agents/.
 
 REPO_URL="https://github.com/ydb-platform/ai-dev-kit"
-VERSION="0.2.0"
+VERSION="0.3.0"
 
 # ── Colors ──────────────────────────────────────────────────────────────────
 
@@ -20,7 +20,12 @@ NC='\033[0m'
 
 # ── Skills list ─────────────────────────────────────────────────────────────
 
-SKILLS=(ydb-sdk ydb-sql ydb-ops)
+SKILLS=(ydb-core ydb-table)
+
+# ydb-core is the baseline onboarding/router skill. Any surface skill selection
+# auto-includes ydb-core unless --no-core is passed — other skills deep-link
+# into its anchor sections (`../ydb-core/SKILL.md#<anchor>`).
+DEFAULT_CO_SKILL="ydb-core"
 
 # ── Agent definitions ───────────────────────────────────────────────────────
 # Format: agent_name:project_dir:global_dir
@@ -60,7 +65,9 @@ ${BOLD}Options:${NC}
   --link                Use symlinks instead of copying (default if source is local)
   --copy                Always copy files (default for remote install)
   --skills=LIST         Install specific skills only (default: all)
-                         Skills: ydb-sdk, ydb-sql, ydb-ops
+                         Skills: ydb-core, ydb-table
+  --no-core             Skip auto-inclusion of ydb-core when --skills is set
+                         (only respected when --skills does not already list it)
   --list                Show supported agents and exit
   --dry-run             Show what would be done without doing it
   --uninstall           Remove installed skills
@@ -76,8 +83,11 @@ ${BOLD}Examples:${NC}
   # Install globally for Claude Code
   $(basename "$0") --agent=claude --global
 
-  # Install only ydb-sdk skill for all agents
-  $(basename "$0") --all --skills=ydb-sdk
+  # Install only ydb-table (ydb-core will be auto-included)
+  $(basename "$0") --all --skills=ydb-table
+
+  # Install only ydb-table without ydb-core
+  $(basename "$0") --all --skills=ydb-table --no-core
 
   # Remote install (auto-detect agents)
   curl -fsSL https://ai.ydb.sh | sh
@@ -169,7 +179,7 @@ resolve_source() {
   fi
 
   # Check if running from the repo (local install)
-  if [[ -n "$script_dir" && -f "${script_dir}/skills/ydb-sdk/SKILL.md" ]]; then
+  if [[ -n "$script_dir" && -f "${script_dir}/skills/ydb-core/SKILL.md" ]]; then
     echo "local:${script_dir}"
     return 0
   fi
@@ -273,6 +283,8 @@ main() {
   local do_detect=false
   local do_list=false
   local do_all=false
+  local skills_explicit=false
+  local no_core=false
 
   # Parse arguments
   while [[ $# -gt 0 ]]; do
@@ -300,6 +312,10 @@ main() {
         ;;
       --skills=*)
         IFS=',' read -ra install_skills <<< "${1#--skills=}"
+        skills_explicit=true
+        ;;
+      --no-core)
+        no_core=true
         ;;
       --list)
         do_list=true
@@ -336,6 +352,7 @@ main() {
     done
     echo ""
     echo -e "${BOLD}Available skills:${NC} ${SKILLS[*]}"
+    echo -e "${BOLD}Baseline skill (auto-included):${NC} ${DEFAULT_CO_SKILL}"
     exit 0
   fi
 
@@ -380,6 +397,23 @@ main() {
     [[ -z "$method" ]] && method="copy"
   else
     [[ -z "$method" ]] && method="link"
+  fi
+
+  # ── Auto-include ydb-core ───────────────────────────────────────────────
+  # When the user explicitly picked a subset via --skills, make sure ydb-core
+  # is in the set so relative `../ydb-core/SKILL.md` refs resolve. Skip if
+  # --no-core was passed. When --skills wasn't used, install_skills already
+  # contains the full SKILLS list.
+
+  if [[ "$skills_explicit" == true && "$no_core" != true ]]; then
+    local has_core=false
+    for s in "${install_skills[@]}"; do
+      [[ "$s" == "$DEFAULT_CO_SKILL" ]] && has_core=true
+    done
+    if [[ "$has_core" == false ]]; then
+      log_info "Including ${DEFAULT_CO_SKILL} (baseline skill; pass --no-core to skip)"
+      install_skills=("$DEFAULT_CO_SKILL" "${install_skills[@]}")
+    fi
   fi
 
   # ── Validate skills ─────────────────────────────────────────────────────

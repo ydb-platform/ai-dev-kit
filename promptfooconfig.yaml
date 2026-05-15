@@ -1,0 +1,253 @@
+# YDB skills compatibility matrix.
+#
+# Goal: for each (provider, model), measure how well our skills work when
+# loaded into a coding-agent-style system prompt. Identifies the minimum
+# model per vendor family that still passes most tests.
+#
+# Usage:
+#   export OPENROUTER_API_BASE_URL="..."
+#   export OPENROUTER_API_KEY="..."
+#   npx promptfoo@latest eval
+#   npx promptfoo@latest view
+#
+# Every model is accessed through an openrouter-style endpoint (OpenAI-
+# compatible) using the generic `http` provider — needed because the endpoint
+# wraps responses in an envelope {key, response: {...OpenAI-shape...}}, and
+# promptfoo's built-in openai provider has no way to unwrap that. We pass
+# json.response.choices[0].message.content to transformResponse to extract
+# the assistant text from inside the envelope.
+
+description: YDB skills compatibility matrix
+
+# Common bits shared across every provider via YAML anchors / merge keys.
+_http_headers: &headers
+  Content-Type: application/json
+  Authorization: "Bearer {{ env.OPENROUTER_API_KEY }}"
+
+_http_base: &http
+  method: POST
+  url: "{{ env.OPENROUTER_API_BASE_URL }}/v1/chat/completions"
+  headers: *headers
+  # Unwraps the proxy envelope + captures tokenUsage. See transform-response.js
+  # for the full contract. An external file avoids YAML-scalar parsing
+  # quirks that broke inline IIFE expressions.
+  transformResponse: file://transform-response.js
+
+_messages: &messages
+  - role: system
+    content: |
+      You are a coding assistant helping a user work with YDB — an open-source
+      distributed SQL database (https://ydb.tech). Domain-specific skills are
+      installed; their full content follows. Use the skill whose scope matches
+      the user's request. If no skill applies, answer from general knowledge
+      but say so explicitly.
+
+      Follow the content rules stated inside each skill — especially: do not
+      invent YDB-specific details; cite rule IDs when auditing; prefer stating
+      uncertainty over guessing. When the answer depends on a doc page the
+      skill links to, quote the link rather than paraphrase from memory.
+
+      Be concise. Answer in the minimum words and code the user actually needs
+      — no "Great question!" openings, no recap of what the user asked, no
+      closing "let me know if …" paragraphs, no marketing. Code snippets over
+      prose when applicable. Aim for under 300 words unless the task genuinely
+      needs more (e.g. a multi-file example).
+
+      ══════════════════════════════════════════════════════════════════════════
+      SKILL: ydb-core
+      ══════════════════════════════════════════════════════════════════════════
+      {{ ydb_core }}
+
+      ══════════════════════════════════════════════════════════════════════════
+      SKILL: ydb-table
+      ══════════════════════════════════════════════════════════════════════════
+      {{ ydb_table }}
+  - role: user
+    content: "{{ user_prompt }}"
+
+providers:
+  # ── Cloud baselines (one per vendor family) ────────────────────────────
+  - id: https:anthropic/claude-sonnet-4.6
+    label: Anthropic · Sonnet 4.6 (baseline)
+    config:
+      <<: *http
+      body:
+        model: "anthropic/claude-sonnet-4.6"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:google/gemini-2.5-pro
+    label: Google · Gemini 2.5 Pro
+    config:
+      <<: *http
+      body:
+        model: "google/gemini-2.5-pro"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:openai/gpt-5.4
+    label: OpenAI · GPT-5.4
+    config:
+      <<: *http
+      body:
+        model: "openai/gpt-5.4"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:x-ai/grok-4
+    label: xAI · Grok 4
+    config:
+      <<: *http
+      body:
+        model: "x-ai/grok-4"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+
+  # ── Open-source (the set enterprise customers self-host) ───────────────
+  - id: https:qwen/qwen3-coder
+    label: Qwen3 Coder (flagship)
+    config:
+      <<: *http
+      body:
+        model: "qwen/qwen3-coder"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:qwen/qwen3-coder-30b-a3b-instruct
+    label: Qwen3 Coder 30B-A3B (self-hostable)
+    config:
+      <<: *http
+      body:
+        model: "qwen/qwen3-coder-30b-a3b-instruct"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:qwen/qwen-2.5-coder-32b-instruct
+    label: Qwen 2.5 Coder 32B (widely-deployed legacy)
+    config:
+      <<: *http
+      body:
+        model: "qwen/qwen-2.5-coder-32b-instruct"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:deepseek/deepseek-v3.2
+    label: DeepSeek v3.2
+    config:
+      <<: *http
+      body:
+        model: "deepseek/deepseek-v3.2"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:mistralai/devstral-medium
+    label: Mistral Devstral Medium
+    config:
+      <<: *http
+      body:
+        model: "mistralai/devstral-medium"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:mistralai/codestral-2508
+    label: Mistral Codestral
+    config:
+      <<: *http
+      body:
+        model: "mistralai/codestral-2508"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:meta-llama/llama-4-maverick
+    label: Meta Llama 4 Maverick
+    config:
+      <<: *http
+      body:
+        model: "meta-llama/llama-4-maverick"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:z-ai/glm-4.6
+    label: Z.ai GLM 4.6
+    config:
+      <<: *http
+      body:
+        model: "z-ai/glm-4.6"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:moonshotai/kimi-k2
+    label: Moonshot Kimi K2
+    config:
+      <<: *http
+      body:
+        model: "moonshotai/kimi-k2"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+
+# Single system-prompt template — see prompts/coding-agent.yaml.
+# It embeds every installable skill's full SKILL.md body into the system
+# message. Tests only supply the user-side {{user_prompt}}.
+prompts:
+  - "{{ user_prompt }}"
+
+defaultTest:
+  # Skill bodies are loaded once, available to every test. Editing a SKILL.md
+  # automatically flows into the prompt on the next eval run.
+  vars:
+    ydb_core: file://skills/ydb-core/SKILL.md
+    ydb_table: file://skills/ydb-table/SKILL.md
+  # Hard pre-filter: any output that came back as the defensive
+  # "[provider error] ..." stub is a fail regardless of what the grader says.
+  # Without this the grader will happily pass a 400/401 error as a "valid
+  # refusal" response.
+  assert:
+    - type: not-contains
+      value: "[provider error]"
+  # Default rubric grader — one capable model judges every llm-rubric
+  # assertion so grader quality is a fixed constant across the matrix.
+  options:
+    provider:
+      id: https:anthropic/claude-sonnet-4.6-grader
+      config:
+        <<: *http
+        # Grader receives the rendered rubricPrompt via promptfoo's `prompt`
+        # var — NOT the test's user_prompt. We pass it as a single user turn.
+        body:
+          model: "anthropic/claude-sonnet-4.6"
+          messages:
+            - role: user
+              content: "{{ prompt }}"
+          temperature: 0.0
+          max_tokens: 1024
+    rubricPrompt: |
+      Grade whether an AI assistant's response substantively addressed a
+      user's YDB question and satisfied the rubric criteria.
+
+      USER PROMPT:
+      {{ user_prompt }}
+
+      ASSISTANT RESPONSE:
+      {{ output }}
+
+      RUBRIC:
+      {{ rubric }}
+
+      Rules:
+      - Generic "I'm ready to help" greetings, empty refusals, requests for
+        clarification when the user already gave enough detail, or answers to
+        a different question → FAIL.
+      - Partial but substantive answers that miss a minor criterion → may PASS
+        with score < 1.
+      - A correct response must clearly attempt to satisfy the rubric's key
+        criteria, grounded in the loaded skill content.
+
+      Reply with ONE line — a single JSON object, no code fence, no prose:
+      {"pass": true|false, "score": 0.0, "reason": "…"}
+
+# Tests are discovered from tests/<skill>/*.yaml.
+tests:
+  - file://tests/ydb-core/*.yaml
+  - file://tests/ydb-table/*.yaml
