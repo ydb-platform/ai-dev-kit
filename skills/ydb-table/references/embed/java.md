@@ -2,7 +2,7 @@
 
 ## Stack
 
-YDB Java app code typically layers as: **ydb-java-sdk** → **ydb-jdbc-driver** → **Hibernate** → **Spring Data JPA**. Most application code uses the JDBC driver as the entry point. Connection-string format and authentication environment variables: see [`../../ydb-core/SKILL.md#connecting`](../../ydb-core/SKILL.md#connecting). Setup and connection examples: <https://github.com/ydb-platform/ydb-jdbc-driver>. Worked Spring Data JDBC / JPA / Flyway / jOOQ / Liquibase examples: <https://github.com/ydb-platform/ydb-java-examples/tree/master/jdbc>.
+YDB Java app code typically layers as: **ydb-java-sdk** → **ydb-jdbc-driver** → **Hibernate** → **Spring Data JPA**. Most application code uses the JDBC driver as the entry point. Connection-string format and authentication environment variables: see [`../../../ydb-core/SKILL.md#connecting`](../../../ydb-core/SKILL.md#connecting). Setup and connection examples: <https://github.com/ydb-platform/ydb-jdbc-driver>. Worked Spring Data JDBC / JPA / Flyway / jOOQ / Liquibase examples: <https://github.com/ydb-platform/ydb-java-examples/tree/master/jdbc>.
 
 ## Bulk operations
 
@@ -123,4 +123,4 @@ YDB Query Service defaults to `SerializableRW`. Conflicting transactions are det
 
 ## Connection
 
-See [`../../ydb-core/SKILL.md#connecting`](../../ydb-core/SKILL.md#connecting).
+See [`../../../ydb-core/SKILL.md#connecting`](../../../ydb-core/SKILL.md#connecting).
