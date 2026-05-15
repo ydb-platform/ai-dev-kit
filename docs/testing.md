@@ -8,11 +8,11 @@ The tool is [promptfoo](https://www.promptfoo.dev). One declarative `promptfooco
 
 Every eval runs this shape:
 
-- **System prompt:** "You are a coding agent. Here are four YDB skills installed — full content of each SKILL.md." (See [`prompts/coding-agent.yaml`](../prompts/coding-agent.yaml).)
+- **System prompt:** the installable skills' content embedded into one system message. `ydb-core` is loaded as a single `SKILL.md`. `ydb-table` is loaded as `SKILL.md` plus its `references/bulk-write.md`, `references/transactions.md`, `references/embed/java.md`, and `rules/embed/java.md` — i.e. the full body of the skill, as if the agent had read every Load-Sources entry.
 - **User prompt:** supplied by the test case (`tests/<skill>/<case>.yaml`).
 - **Grader:** `claude-sonnet-4.6` judges each `llm-rubric` assertion against a criterion block written in plain English.
 
-This approximates the *ceiling* per model — all skills are fully visible. A model that fails this can't work in a real runtime (Claude Code, Codex, Cursor, etc.) where the agent additionally has to decide which skill to load.
+This approximates the *ceiling* per model — every loadable file is fully in context. A model that fails this can't work in a real runtime (Claude Code, Codex, Cursor, etc.) where the agent additionally has to decide which skill to load and which references to read.
 
 Runtime-specific behavior (how Claude Code chooses skills vs. how Codex does) is **not** tested here. That requires installing each runtime and running against it, which is a manual exercise — see the [known gap](#runtime-level-testing-known-gap) below.
 
@@ -114,6 +114,16 @@ Per-model summary: pass rate column on the right. This is what drives the "minim
 
 Not done by default. The matrix changes every time any skill or test changes, so committing full results would be noisy. If you want a snapshot for an external stakeholder, run `npx promptfoo@latest eval --output matrix.md --format markdown`.
 
+## Static validator
+
+Independent of the promptfoo matrix, [`scripts/validate-skills.py`](../scripts/validate-skills.py) enforces structural invariants over `skills/` — SKILL.md frontmatter shape, no `TODO(author)` markers, language-agnostic top-level `references/` files, relative-link resolution, and that every `RULE-<PREFIX>-<NN>` ID uses a prefix registered in [`docs/authoring.md`](authoring.md). It runs as a pre-flight inside `install.sh` (failure aborts the install) and is also runnable standalone:
+
+```bash
+python3 scripts/validate-skills.py
+```
+
+Exit code 0 = all checks passed; 1 = at least one violation, printed to stderr with file path and reason. Use this before opening a PR to catch the cheap mistakes without burning a promptfoo run.
+
 ## Runtime-level testing (known gap)
 
 This setup tests models. It does not test runtimes — Claude Code / Cursor / Windsurf / Codex / Gemini CLI each have their own skill-loading mechanics (description-first routing, varying system-prompt construction, different tool sets) that can change the outcome from what the matrix shows.
@@ -130,7 +140,7 @@ A non-trivial runtime-testing harness would need per-runtime drivers (subprocess
 ## What is NOT included
 
 - **CI workflow.** Promptfoo runs locally against an OpenAI-compatible endpoint. CI wiring would require that endpoint to be reachable from CI and an API key provisioned as a secret — out of scope right now.
-- **Cost tracking.** The matrix runs every provider × every test. With ~12 models × 12 tests × grader, expect on the order of 150–200 model calls per full run. Use `--filter-providers` / `--filter-tests` during iteration to keep the spend low.
+- **Cost tracking.** The matrix runs every provider × every test. Use `--filter-providers` / `--filter-pattern` during iteration to keep the spend low.
 - **Trigger-only tests.** The current layout always loads all installable skills. If you need to measure "does the model correctly pick ydb-table given only the descriptions?" — that's a second-stage rig, not built here.
 
 ## See also
