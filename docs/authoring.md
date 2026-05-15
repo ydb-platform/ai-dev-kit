@@ -13,7 +13,7 @@ Skills are decomposed **by YDB surface**, not by developer medium (code vs SQL v
 | `ydb-topics` | Pub/sub API + native Kafka adapter. |
 | `ydb-coordination` | Distributed locks, semaphores, leader election. |
 
-`ydb-ops` (cluster operations) is deferred as a separate future skill; see `TODO.md`.
+`ydb-ops` (cluster operations) is deferred as a separate future skill.
 
 ### Surface-boundary decision principle
 
