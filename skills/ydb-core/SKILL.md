@@ -86,7 +86,6 @@ Auth env vars (canonical reference: https://ydb.tech/docs/en/reference/ydb-sdk/a
 - `YDB_STATIC_CREDENTIALS_USER` + `YDB_STATIC_CREDENTIALS_PASSWORD` + `YDB_STATIC_CREDENTIALS_ENDPOINT` — static user/password auth.
 - `YDB_ANONYMOUS_CREDENTIALS` — local Docker only. Value semantics differ per SDK; check the auth doc.
 
-
 ## local-deployment
 
 Single-node docker (https://ydb.tech/docs/en/quickstart):
