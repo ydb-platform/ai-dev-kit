@@ -62,6 +62,18 @@ _messages: &messages
       SKILL: ydb-table
       ══════════════════════════════════════════════════════════════════════════
       {{ ydb_table }}
+
+      --- ydb-table / references / bulk-write.md ---
+      {{ ydb_table_refs_bulk_write }}
+
+      --- ydb-table / references / transactions.md ---
+      {{ ydb_table_refs_transactions }}
+
+      --- ydb-table / references / embed / java.md ---
+      {{ ydb_table_refs_java }}
+
+      --- ydb-table / rules / embed / java.md ---
+      {{ ydb_table_rules_java }}
   - role: user
     content: "{{ user_prompt }}"
 
@@ -199,6 +211,10 @@ defaultTest:
   vars:
     ydb_core: file://skills/ydb-core/SKILL.md
     ydb_table: file://skills/ydb-table/SKILL.md
+    ydb_table_refs_bulk_write: file://skills/ydb-table/references/bulk-write.md
+    ydb_table_refs_transactions: file://skills/ydb-table/references/transactions.md
+    ydb_table_refs_java: file://skills/ydb-table/references/embed/java.md
+    ydb_table_rules_java: file://skills/ydb-table/rules/embed/java.md
   # Hard pre-filter: any output that came back as the defensive
   # "[provider error] ..." stub is a fail regardless of what the grader says.
   # Without this the grader will happily pass a 400/401 error as a "valid
