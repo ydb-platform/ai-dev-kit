@@ -1,0 +1,38 @@
+<!--
+  Copy-paste skeleton for a references/<topic>.md file.
+
+  references/ is for AUTHORING: short doc excerpts + positive-pattern snippets.
+  NOT for audit. No RULE-XX IDs here — those live in rules/<topic>.md.
+
+  Conventions live in docs/authoring.md. Read it before filling this out.
+  Replace every TODO(author) marker; leave none in a merged file.
+-->
+# TODO(author): Topic title
+
+## What this is
+
+TODO(author): one-paragraph framing of the subsystem this reference covers. Where it lives in YDB (API name, SDK symbol, YQL construct), what problem it solves. A couple of sentences — enough that a model reading this reference knows what to do with it.
+
+Source: TODO(author). Link the authoritative upstream — YDB docs, the SDK repo, the framework spec, the JDK JavaDoc — whichever the pattern below is actually grounded in. Use the version-pinned canonical URL and verify it returns HTTP 200 before merging.
+
+## Canonical pattern
+
+```TODO(author-lang)
+// TODO(author): the minimal snippet that does the Right Thing for this subsystem.
+// Verified against the upstream source at <module path / file>.
+```
+
+### Why this is the pattern
+
+TODO(author): 2–4 sentences explaining the invariant or constraint that makes this the right pattern. Name the invariant ("server-side serializability detects the conflict for you", "the plan cache keys on the parameterized query text", "the SDK retries `SQLRecoverableException` for you only if you let it surface") so the guidance generalizes to the next case the user hits.
+
+## Variants
+
+<!-- Optional. Remove this section if there's only one canonical pattern. -->
+
+TODO(author): describe any legitimate variants and when to pick each. Each variant must be grounded in upstream source — don't invent. If there's only one right answer, delete this section.
+
+## Related
+
+- TODO(author): the matching `rules/<topic>.md` for anti-patterns on the same subsystem.
+- TODO(author): the relevant `../ydb-core/SKILL.md#<anchor>` if the pattern depends on foundational context (verify the anchor exists; today the real ones are `#overview`, `#versioning`, `#surfaces`, `#packages`, `#connecting`, `#local-deployment`, `#integrations`, `#schema-basics`).

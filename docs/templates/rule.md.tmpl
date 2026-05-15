@@ -1,0 +1,34 @@
+<!--
+  Copy-paste skeleton for a single entry in a rules/<topic>.md file.
+  Append this block to the existing rules file, or use it as the seed
+  for a new one.
+
+  Before merging:
+  1. Register your <PREFIX> in docs/authoring.md if it's new.
+  2. Pick the next free <NN> within that prefix.
+  3. Verify the "What to look for" pattern is actually grep-able in real code.
+  4. Verify the "Problem" and "Fix" against upstream SDK source or YDB docs.
+     Do not invent rules from training-data memory.
+
+  Rules MUST be self-contained: do not cross-reference other skills.
+-->
+
+### RULE-<PREFIX>-<NN>: TODO(author) short title
+
+**Severity**: Critical | High | Medium | Low  <!-- pick one; see docs/authoring.md for definitions -->
+
+**What to look for**: TODO(author) a short grep-friendly signal — an import path, a method call, a YQL keyword, a config key. The narrower the signal, the fewer false positives.
+
+**Problem**: TODO(author) 1–3 lines on why this breaks. Name the invariant it violates (hot partition, retrying a non-idempotent operation after a `Transaction locks invalidated` failure, session leak, missing parameterization losing the plan-cache hit, etc.) so a reader can generalize beyond the immediate symptom.
+
+**Fix**:
+
+```TODO(author-lang)
+// TODO(author): minimal corrected snippet. Verified against upstream SDK source.
+```
+
+<!-- Optional. Delete the subsections below if they don't add value. -->
+
+**Source**: TODO(author) link to SDK source or YDB docs that backs this rule.
+
+**See also**: TODO(author) `references/<topic>.md` for the positive-pattern counterpart.

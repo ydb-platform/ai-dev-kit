@@ -1,0 +1,53 @@
+<!--
+  Copy-paste skeleton for a surface skill's SKILL.md (e.g. ydb-table, ydb-topics).
+  ydb-core is a single-file router with stable anchor sections and does not
+  follow this shape — see its existing SKILL.md if you need to edit it.
+
+  Conventions live in docs/authoring.md. Read it before filling this out.
+  Replace every TODO(author) marker; leave none in a merged file.
+-->
+---
+name: TODO(author)-skill-name
+description: TODO(author). Third person. State what the skill does AND specific phrases / SDK symbols / YQL keywords that should trigger it — only for content actually delivered. If a trigger doesn't have grounded material behind it, leave it out.
+---
+
+# TODO(author) Skill Name
+
+TODO(author): one-sentence tagline stating what the skill does and who it's for.
+
+## Workflow
+
+1. **Classify the task.** Authoring (write a new query, schema, or service code) or audit (review existing code for anti-patterns).
+2. **Load sources** per the table below.
+3. **Do the work.** When auditing, cite `RULE-<PREFIX>-<NN>` IDs from `rules/`. When a topic isn't covered by the loaded sources, say so and link the relevant upstream YDB or SDK doc rather than guessing.
+
+## Load sources
+
+<!--
+  List ONLY the files that exist. Aspirational rows pointing at future content
+  send the agent down dead ends. Add rows as content lands.
+-->
+
+| Task                                   | Files to consult                                            |
+| -------------------------------------- | ----------------------------------------------------------- |
+| TODO(author): describe the first task  | `references/<topic>.md`                                     |
+| TODO(author): describe an audit task   | `rules/<topic>.md`                                          |
+
+For foundational YDB context (connection, schema basics): link to the relevant anchor under `../ydb-core/SKILL.md`. Real anchors today: `#overview`, `#versioning`, `#surfaces`, `#packages`, `#connecting`, `#local-deployment`, `#integrations`, `#schema-basics`. Verify the anchor exists before linking.
+
+<!--
+  ## Gotchas — OPTIONAL. Add only if you have 3+ real, grounded traps to list.
+  Empty or placeholder Gotchas sections are worse than no section: they occupy
+  selector context and signal nothing. Delete this whole block if you don't
+  have real entries ready.
+
+  Format when populated:
+    ## Gotchas
+    - **Short title.** One-sentence trap + the corrective action.
+-->
+
+## Content rules
+
+- Cite `RULE-<PREFIX>-<NN>` IDs when auditing. Fabricated rules are the largest source of false positives — if a rule is not in the loaded `rules/` file, do not invent one.
+- Prefer stating uncertainty over guessing. If the user asks about a feature or method not covered in the loaded sources, say so and link the upstream doc rather than extrapolating.
+- Explain the *why* behind recommendations. YDB has non-obvious invariants (partition locality, server-side serializability, query-cache plan reuse keyed on the parameterized query text) that drive the right answer; naming the invariant makes the guidance transferable to the next case the user will hit.
