@@ -103,12 +103,14 @@ public class Token {
 
 **What to look for**: `catch (SQLException …)` blocks that log and continue, or that retry unconditionally without inspecting the subtype. Absence of any retry classification around transactional methods that talk to YDB.
 
-**Problem**: the `ydb-jdbc-driver` classifies failures through the standard `java.sql` exception hierarchy, and the two categories want different handling:
+**Problem**: the `ydb-jdbc-driver` surfaces failures through the standard `java.sql` exception hierarchy, and the two categories the JDBC contract exposes want different handling:
 
-- `SQLRecoverableException` (driver: `YdbRetryableException`) — fully retryable. Safe to retry for any operation. Not retrying loses work that would have succeeded on retry.
-- `SQLTransientException` (driver: `YdbUnavailbaleException extends SQLTransientConnectionException`, `YdbConditionallyRetryableException`, `YdbTimeoutException extends SQLTimeoutException`) — the server may have already committed before the failure surfaced. Retrying a non-idempotent statement (`INSERT`, decrement, transfer) risks double effect. Safe to retry only for idempotent operations: `UPSERT`, idempotency-key-protected writes, reads.
+- `SQLRecoverableException` — fully retryable. Safe to retry for any operation. Not retrying loses work that would have succeeded on retry.
+- `SQLTransientException` — the server may have already committed before the failure surfaced. Retrying a non-idempotent statement (`INSERT`, decrement, transfer) risks double effect. Safe to retry only for idempotent operations: `UPSERT`, idempotency-key-protected writes, reads.
 
-Catching the supertype `SQLException` (or `Exception`) and retrying both cases the same way violates the contract in one direction or the other.
+These are the two types JDBC consumers should branch on. Driver-internal subclasses exist but should not be referenced from application code — they are not part of the published contract and can change.
+
+Catching the supertype `SQLException` (or `Exception`) and retrying both categories the same way violates the contract in one direction or the other.
 
 **Fix**:
 
@@ -145,4 +147,4 @@ public void insertBatch(List<Token> batch) {
 }
 ```
 
-**Source**: `java.sql.SQLRecoverableException`, `SQLTransientException` — <https://docs.oracle.com/en/java/javase/21/docs/api/java.sql/java/sql/SQLException.html>. ydb-jdbc-driver exception mapping: `tech.ydb.jdbc.exception.ExceptionFactory` in <https://github.com/ydb-platform/ydb-jdbc-driver>. Example meta-annotation pattern: <https://github.com/ydb-platform/ydb-java-examples/tree/master/jdbc/ydb-token-app>.
+**Source**: `java.sql.SQLRecoverableException`, `SQLTransientException` — <https://docs.oracle.com/en/java/javase/21/docs/api/java.sql/java/sql/SQLException.html>. Example meta-annotation pattern: <https://github.com/ydb-platform/ydb-java-examples/tree/master/jdbc/ydb-token-app>.
