@@ -5,33 +5,23 @@
 # model per vendor family that still passes most tests.
 #
 # Usage:
-#   export OPENROUTER_API_BASE_URL="..."
 #   export OPENROUTER_API_KEY="..."
 #   npx promptfoo@latest eval
 #   npx promptfoo@latest view
 #
-# Every model is accessed through an openrouter-style endpoint (OpenAI-
-# compatible) using the generic `http` provider — needed because the endpoint
-# wraps responses in an envelope {key, response: {...OpenAI-shape...}}, and
-# promptfoo's built-in openai provider has no way to unwrap that. We pass
-# json.response.choices[0].message.content to transformResponse to extract
-# the assistant text from inside the envelope.
+# Every model is accessed through public OpenRouter via the generic `http`
+# provider. OpenRouter speaks the OpenAI chat-completions shape, so we only
+# need to extract `choices[0].message.content`.
 
 description: YDB skills compatibility matrix
 
-# Common bits shared across every provider via YAML anchors / merge keys.
-_http_headers: &headers
-  Content-Type: application/json
-  Authorization: "Bearer {{ env.OPENROUTER_API_KEY }}"
-
 _http_base: &http
   method: POST
-  url: "{{ env.OPENROUTER_API_BASE_URL }}/v1/chat/completions"
-  headers: *headers
-  # Unwraps the proxy envelope + captures tokenUsage. See transform-response.js
-  # for the full contract. An external file avoids YAML-scalar parsing
-  # quirks that broke inline IIFE expressions.
-  transformResponse: file://transform-response.js
+  url: "https://openrouter.ai/api/v1/chat/completions"
+  headers:
+    Content-Type: application/json
+    Authorization: "Bearer {{ env.OPENROUTER_API_KEY }}"
+  transformResponse: json.choices[0].message.content
 
 _messages: &messages
   - role: system

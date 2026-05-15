@@ -21,11 +21,10 @@ Runtime-specific behavior (how Claude Code chooses skills vs. how Codex does) is
 One-time:
 
 ```bash
-# Endpoint root for an OpenRouter-style OpenAI-compatible provider.
-# The config appends /api/v1 itself — set only the host here.
-export OPENROUTER_API_BASE_URL="https://openrouter.ai"
 export OPENROUTER_API_KEY="<token>"
 ```
+
+The matrix talks to public OpenRouter (`https://openrouter.ai/api/v1/chat/completions`); the URL is hardcoded in `promptfooconfig.yaml`, only the key has to come from the environment.
 
 promptfoo runs via `npx` — no local install needed:
 
