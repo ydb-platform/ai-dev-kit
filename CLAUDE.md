@@ -47,8 +47,6 @@ docs/
 - **YDB-level files stay language-agnostic.** `references/bulk-write.md`, `references/transactions.md`, and similar cross-cutting references must not mention JDBC / Hibernate / Spring / Java / Python / Go / .NET / C++ tokens. Per-language guidance goes in `references/embed/<lang>.md` and `rules/embed/<lang>.md`. Verify with `grep -iE 'jdbc|hibernate|spring|java|jpa|python|golang|\.net|dotnet|csharp'` before committing.
 - **Prefix registry.** New rule prefixes must be registered in the table in `docs/authoring.md` on first use. Never reuse an ID or renumber after merge. Currently allocated: `JV` (Java SDK / JDBC / Hibernate / Spring Data).
 - **Skill `description:` matches shipped content, not aspirations.** The selector triggers on what's in `description:`. If you list `ydb-go-sdk` in the triggers but the skill has no grounded Go content, the skill will fire on Go code and have nothing useful to load — worse than not firing. Update the description when content lands, not before.
-- **No `TODO(author):` markers.** An empty section is better than a placeholder. The selector loads section headers; a Gotchas section with two `TODO` bullets occupies tokens and signals nothing.
-- **No `README.md` files inside `skills/<surface>/references/` or `rules/`.** Authoring conventions live in `docs/authoring.md`. Scaffolding READMEs inside skill subdirectories are noise the agent loads with the skill body.
 
 ## Git workflow
 
@@ -67,4 +65,3 @@ For routine additions — one new rule, one new reference file, a wording tweak 
 - Full content conventions and prefix registry: [`docs/authoring.md`](docs/authoring.md).
 - Templates for new files: [`docs/templates/`](docs/templates/).
 - Testing harness: [`docs/testing.md`](docs/testing.md).
-- Deferred work: [`TODO.md`](TODO.md).

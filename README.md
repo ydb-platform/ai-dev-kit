@@ -2,7 +2,7 @@
 
 AI coding agent skills for [YDB](https://ydb.tech) — for writing YQL, designing schemas, and reviewing Java application code against YDB. Skills auto-trigger based on context.
 
-> **Status:** framework and scaffolding. Skill bodies are intentionally thin — content is migrated surface-by-surface, grounded in live YDB SDK source and upstream docs. See [`TODO.md`](TODO.md) for deferred work.
+> **Status:** framework and scaffolding. Skill bodies are intentionally thin — content is migrated surface-by-surface, grounded in live YDB SDK source and upstream docs.
 
 ## What's Inside
 
@@ -102,7 +102,6 @@ docs/
   testing.md                     How to run the compatibility matrix with promptfoo
   templates/                     Copy-paste skeletons for SKILL.md, references, rules
 install.sh                       Universal installer
-TODO.md                          Deferred work: ydb-ops, content migration, runtime-level testing
 ```
 
 ## Testing

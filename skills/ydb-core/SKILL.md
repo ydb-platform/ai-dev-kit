@@ -43,7 +43,7 @@ Router to specialist skills:
 | `ydb-topics` | producing/consuming YDB topics, the Kafka-compat endpoint, changefeed configuration on the producer side |
 | `ydb-coordination` | distributed locks, semaphores, leader election |
 
-Mixed-surface code (e.g. Go service that reads topics and runs queries) triggers both surface skills. Cluster operations (deployment beyond local, monitoring, backups, capacity) are out of scope of this repo — see [`TODO.md`](../../TODO.md).
+Cluster operations (deployment beyond local, monitoring, backups, capacity) are out of scope of this repo.
 
 ## packages
 

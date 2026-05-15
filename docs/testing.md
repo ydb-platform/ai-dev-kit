@@ -135,7 +135,7 @@ Runtime-level testing requires installing each runtime and running against it wi
 3. Paste a prompt from `tests/` into the runtime's chat.
 4. Eye-check the response.
 
-A non-trivial runtime-testing harness would need per-runtime drivers (subprocess calls or embedded automation). That's deferred — see [`TODO.md`](../TODO.md).
+A non-trivial runtime-testing harness would need per-runtime drivers (subprocess calls or embedded automation). Deferred.
 
 ## What is NOT included
 
