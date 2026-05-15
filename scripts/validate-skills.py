@@ -1,0 +1,212 @@
+#!/usr/bin/env python3
+"""Static validation for the YDB skills under skills/.
+
+Enforces the load-bearing invariants documented in CLAUDE.md and
+docs/authoring.md:
+
+  1. Every skills/<name>/SKILL.md has frontmatter with `name:` matching the
+     directory and a non-empty `description:`, and no other top-level fields.
+  2. No `TODO(author)` markers anywhere under skills/.
+  3. Files under skills/<surface>/references/ that are NOT inside an
+     embed/<lang>/ subdirectory must not contain language-specific tokens
+     (JDBC / Hibernate / Spring / Java / JPA / Python / Go / .NET / C++).
+  4. Every relative markdown link in skills/**/*.md resolves to a real file.
+  5. Every `RULE-<PREFIX>-<NN>` ID uses a prefix listed in the registry
+     table in docs/authoring.md.
+
+Run from the repository root:
+
+    python3 scripts/validate-skills.py
+
+Exit code 0 = all checks passed; 1 = at least one violation reported.
+Invoked from install.sh before any skill is copied / linked.
+"""
+
+from __future__ import annotations
+
+import pathlib
+import re
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+SKILLS_DIR = ROOT / "skills"
+AUTHORING_MD = ROOT / "docs" / "authoring.md"
+
+LANG_TOKENS = re.compile(
+    r"\b(?:jdbc|hibernate|spring|java|jpa|python|golang|"
+    r"dotnet|csharp|cpp)\b|@version|\.NET",
+    re.IGNORECASE,
+)
+
+RULE_ID = re.compile(r"\bRULE-([A-Z][A-Z0-9]*)-(\d{2,})\b")
+
+# Frontmatter delimited by --- ... --- at the top of the file.
+FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
+
+# A markdown link with a relative target (no scheme, no fragment-only ref).
+RELATIVE_LINK = re.compile(r"\]\((?!https?://|#)([^)]+)\)")
+
+
+def fail(violations: list[str], path: pathlib.Path, msg: str) -> None:
+    violations.append(f"{path.relative_to(ROOT)}: {msg}")
+
+
+def check_skill_md(path: pathlib.Path, violations: list[str]) -> None:
+    text = path.read_text()
+    m = FRONTMATTER.match(text)
+    if not m:
+        fail(violations, path, "missing or malformed frontmatter block")
+        return
+
+    frontmatter = m.group(1)
+    fields: dict[str, str] = {}
+    for line in frontmatter.splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        if ":" not in line:
+            continue
+        key, _, value = line.partition(":")
+        fields[key.strip()] = value.strip()
+
+    expected_name = path.parent.name
+    if fields.get("name") != expected_name:
+        fail(
+            violations,
+            path,
+            f"frontmatter name must be '{expected_name}', "
+            f"got {fields.get('name')!r}",
+        )
+
+    if not fields.get("description"):
+        fail(violations, path, "frontmatter description is empty")
+
+    allowed = {"name", "description"}
+    extra = set(fields) - allowed
+    if extra:
+        fail(
+            violations,
+            path,
+            f"frontmatter has non-spec fields: {sorted(extra)}",
+        )
+
+
+def check_no_todo_marker(path: pathlib.Path, violations: list[str]) -> None:
+    if "TODO(author)" in path.read_text():
+        fail(violations, path, "contains TODO(author) marker")
+
+
+def check_language_agnostic(path: pathlib.Path, violations: list[str]) -> None:
+    """Top-level references/ files must stay language-agnostic."""
+    rel = path.relative_to(SKILLS_DIR)
+    parts = rel.parts
+    # Looking for skills/<surface>/references/<topic>.md, NOT
+    # skills/<surface>/references/embed/<lang>.md.
+    if len(parts) < 3 or parts[1] != "references":
+        return
+    if parts[2] == "embed":
+        return
+    text = path.read_text()
+    hits = LANG_TOKENS.findall(text)
+    if hits:
+        fail(
+            violations,
+            path,
+            f"YDB-level reference must be language-agnostic; "
+            f"found tokens: {sorted(set(h.lower() for h in hits))}",
+        )
+
+
+def check_links(path: pathlib.Path, violations: list[str]) -> None:
+    text = path.read_text()
+    for link in RELATIVE_LINK.findall(text):
+        target = (path.parent / link.split("#")[0]).resolve()
+        if not target.exists():
+            fail(violations, path, f"broken relative link: {link}")
+
+
+def load_registered_prefixes() -> set[str]:
+    """Return prefixes registered in docs/authoring.md's table.
+
+    The registry is a markdown table whose rows start with '| <PREFIX> | …'.
+    Anything that doesn't look like a bare uppercase prefix is ignored.
+    """
+    text = AUTHORING_MD.read_text()
+    prefixes: set[str] = set()
+    in_registry = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith("### prefix registry"):
+            in_registry = True
+            continue
+        if in_registry and stripped.startswith("##"):
+            break
+        if not in_registry or not stripped.startswith("|"):
+            continue
+        cells = [c.strip() for c in stripped.strip("|").split("|")]
+        if not cells:
+            continue
+        candidate = cells[0]
+        if re.fullmatch(r"[A-Z][A-Z0-9]*", candidate):
+            prefixes.add(candidate)
+    return prefixes
+
+
+def check_rule_prefixes(
+    path: pathlib.Path, registered: set[str], violations: list[str]
+) -> None:
+    text = path.read_text()
+    for prefix, _ in RULE_ID.findall(text):
+        if prefix not in registered:
+            fail(
+                violations,
+                path,
+                f"RULE-{prefix}-XX uses prefix not in docs/authoring.md "
+                f"registry",
+            )
+
+
+def main() -> int:
+    if not SKILLS_DIR.is_dir():
+        print(f"validate-skills: skills/ not found at {SKILLS_DIR}", file=sys.stderr)
+        return 1
+    if not AUTHORING_MD.is_file():
+        print(
+            f"validate-skills: docs/authoring.md not found at {AUTHORING_MD}",
+            file=sys.stderr,
+        )
+        return 1
+
+    violations: list[str] = []
+    registered = load_registered_prefixes()
+
+    md_files = sorted(SKILLS_DIR.rglob("*.md"))
+
+    for path in md_files:
+        check_no_todo_marker(path, violations)
+        check_links(path, violations)
+        check_language_agnostic(path, violations)
+        check_rule_prefixes(path, registered, violations)
+        if path.name == "SKILL.md":
+            check_skill_md(path, violations)
+
+    if violations:
+        print("validate-skills: violations found:", file=sys.stderr)
+        for v in violations:
+            print(f"  {v}", file=sys.stderr)
+        return 1
+
+    skill_count = sum(1 for p in md_files if p.name == "SKILL.md")
+    rule_files = sum(
+        1 for p in md_files if p.parent.name == "embed" or "rules" in p.parts
+    )
+    print(
+        f"validate-skills: ok "
+        f"({len(md_files)} markdown files, "
+        f"{skill_count} SKILL.md, "
+        f"{len(registered)} registered rule prefixes)"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

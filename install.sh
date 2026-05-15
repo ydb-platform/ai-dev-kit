@@ -425,6 +425,17 @@ main() {
     fi
   done
 
+  # Static validator: frontmatter shape, no TODO(author), language-agnostic
+  # invariant on YDB-level references, link resolution, RULE-<PREFIX> in
+  # registry. Cheap pre-flight before touching the user's filesystem.
+  local validator="${source_path}/scripts/validate-skills.py"
+  if [[ -f "$validator" ]] && command -v python3 &>/dev/null; then
+    if ! ( cd "$source_path" && python3 scripts/validate-skills.py ); then
+      log_err "Skill validation failed; aborting install"
+      exit 1
+    fi
+  fi
+
   # ── Execute ─────────────────────────────────────────────────────────────
 
   local action="Installing"
