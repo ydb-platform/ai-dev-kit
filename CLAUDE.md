@@ -67,5 +67,4 @@ For routine additions — one new rule, one new reference file, a wording tweak 
 - Full content conventions and prefix registry: [`docs/authoring.md`](docs/authoring.md).
 - Templates for new files: [`docs/templates/`](docs/templates/).
 - Testing harness: [`docs/testing.md`](docs/testing.md).
-- Prior specs / plans (style reference, not required ritual): [`docs/superpowers/specs/`](docs/superpowers/specs/), [`docs/superpowers/plans/`](docs/superpowers/plans/).
 - Deferred work: [`TODO.md`](TODO.md).
