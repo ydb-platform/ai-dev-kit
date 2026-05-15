@@ -71,7 +71,12 @@ def find_latest(target_description: str) -> str:
 
 
 def cell_map(data: dict) -> dict[tuple[str, str], dict]:
-    """Map (provider_label, test_description) → {success, error, output}."""
+    """Map (provider_label, test_description) → {success, transport_error, output}.
+
+    promptfoo populates `error` on every failure (it copies the grader's reason
+    in there too), so we can't use it to detect transport problems. Use
+    `failureReason`: 0=none, 1=assertion fail, 2=transport error.
+    """
     out: dict[tuple[str, str], dict] = {}
     rs = (data.get("results") or {}).get("results") or []
     for r in rs:
@@ -79,7 +84,7 @@ def cell_map(data: dict) -> dict[tuple[str, str], dict]:
         test = (r.get("testCase") or {}).get("description") or "?"
         out[(prov, test)] = {
             "success": bool(r.get("success")),
-            "error": r.get("error"),
+            "transport_error": r.get("failureReason") == 2,
             "output": ((r.get("response") or {}).get("output") or "")[:200],
         }
     return out
@@ -134,7 +139,7 @@ def main() -> int:
         if not s or not b:
             continue
         verdict = classify(
-            s["success"], b["success"], bool(s["error"]), bool(b["error"])
+            s["success"], b["success"], s["transport_error"], b["transport_error"]
         )
         per_test[test][verdict] += 1
         per_cell.append((prov, test, verdict))
