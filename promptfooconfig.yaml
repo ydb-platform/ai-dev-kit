@@ -96,15 +96,6 @@ providers:
         messages: *messages
         temperature: 0.2
         max_tokens: 2048
-  - id: https:x-ai/grok-4
-    label: xAI · Grok 4
-    config:
-      <<: *http
-      body:
-        model: "x-ai/grok-4"
-        messages: *messages
-        temperature: 0.2
-        max_tokens: 2048
 
   # ── Open-source (the set enterprise customers self-host) ───────────────
   - id: https:qwen/qwen3-coder
@@ -143,21 +134,21 @@ providers:
         messages: *messages
         temperature: 0.2
         max_tokens: 2048
-  - id: https:mistralai/devstral-medium
-    label: Mistral Devstral Medium
+  - id: https:mistralai/devstral-2512
+    label: Mistral Devstral 2512
     config:
       <<: *http
       body:
-        model: "mistralai/devstral-medium"
+        model: "mistralai/devstral-2512"
         messages: *messages
         temperature: 0.2
         max_tokens: 2048
-  - id: https:mistralai/codestral-2508
-    label: Mistral Codestral
+  - id: https:openai/gpt-oss-120b
+    label: OpenAI gpt-oss-120b (open weights)
     config:
       <<: *http
       body:
-        model: "mistralai/codestral-2508"
+        model: "openai/gpt-oss-120b"
         messages: *messages
         temperature: 0.2
         max_tokens: 2048
