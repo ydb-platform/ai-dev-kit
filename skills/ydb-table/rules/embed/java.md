@@ -96,3 +96,53 @@ public class Token {
 ```
 
 **Source**: YDB transaction modes — <https://ydb.tech/docs/en/concepts/transactions>. JPA `@Version` semantics — <https://jakarta.ee/specifications/persistence/3.1/jakarta-persistence-spec-3.1.html#a2059>.
+
+### RULE-JV-06: Ignoring retryable JDBC exceptions
+
+**Severity**: Critical
+
+**What to look for**: `catch (SQLException …)` blocks that log and continue, or that retry unconditionally without inspecting the subtype. Absence of any retry classification around transactional methods that talk to YDB.
+
+**Problem**: the `ydb-jdbc-driver` classifies failures through the standard `java.sql` exception hierarchy, and the two categories want different handling:
+
+- `SQLRecoverableException` (driver: `YdbRetryableException`) — fully retryable. Safe to retry for any operation. Not retrying loses work that would have succeeded on retry.
+- `SQLTransientException` (driver: `YdbUnavailbaleException extends SQLTransientConnectionException`, `YdbConditionallyRetryableException`, `YdbTimeoutException extends SQLTimeoutException`) — the server may have already committed before the failure surfaced. Retrying a non-idempotent statement (`INSERT`, decrement, transfer) risks double effect. Safe to retry only for idempotent operations: `UPSERT`, idempotency-key-protected writes, reads.
+
+Catching the supertype `SQLException` (or `Exception`) and retrying both cases the same way violates the contract in one direction or the other.
+
+**Fix**:
+
+Plain JDBC — classify the exception and treat transients as idempotency-gated:
+
+```java
+static final int MAX_RETRIES = 15;
+
+void runWithRetry(Connection c, boolean idempotent, JdbcOp op) throws SQLException {
+    for (int attempt = 0; ; attempt++) {
+        try {
+            op.run(c);
+            return;
+        } catch (SQLRecoverableException e) {
+            if (attempt >= MAX_RETRIES) throw e;
+        } catch (SQLTransientException e) {
+            if (!idempotent || attempt >= MAX_RETRIES) throw e;
+        }
+    }
+}
+```
+
+Spring path — `ydb-java-dialects` does not ship a retry annotation; hand-roll Spring Retry's `@Retryable` with the YDB exception buckets, or copy the meta-annotation pattern from the upstream example app (`ydb-java-examples/jdbc/ydb-token-app`). Note: retrying `SQLTransientException` for all annotated methods is only safe when those methods are themselves idempotent.
+
+```java
+@Retryable(
+    retryFor = { SQLRecoverableException.class, SQLTransientException.class },
+    maxAttempts = MAX_RETRIES,
+    backoff = @Backoff(delay = 100, multiplier = 2.0, maxDelay = 5000, random = true)
+)
+@Transactional
+public void insertBatch(List<Token> batch) {
+    repository.saveAll(batch);
+}
+```
+
+**Source**: `java.sql.SQLRecoverableException`, `SQLTransientException` — <https://docs.oracle.com/en/java/javase/21/docs/api/java.sql/java/sql/SQLException.html>. ydb-jdbc-driver exception mapping: `tech.ydb.jdbc.exception.ExceptionFactory` in <https://github.com/ydb-platform/ydb-jdbc-driver>. Example meta-annotation pattern: <https://github.com/ydb-platform/ydb-java-examples/tree/master/jdbc/ydb-token-app>.
