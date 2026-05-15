@@ -1,0 +1,183 @@
+# YDB skills routing matrix.
+#
+# Goal: given only the skill `description:` fields (no skill bodies),
+# does the model pick the right skill for a user request? This
+# approximates the runtime selector — Claude Code / Cursor / Codex each
+# show installed skills' descriptions to the model and let it pick.
+#
+# Complementary to the main matrix:
+#   promptfooconfig.yaml         — ceiling: skill bodies loaded, can the
+#                                  model use them?
+#   promptfooconfig.routing.yaml — selector: only descriptions, does the
+#                                  right skill get picked?
+#
+# Usage:
+#   export OPENROUTER_API_KEY="..."
+#   npx promptfoo@latest eval -c promptfooconfig.routing.yaml
+
+description: YDB skills routing matrix
+
+_http_base: &http
+  method: POST
+  url: "https://openrouter.ai/api/v1/chat/completions"
+  headers:
+    Content-Type: application/json
+    Authorization: "Bearer {{ env.OPENROUTER_API_KEY }}"
+  transformResponse: json.choices[0].message.content
+
+_messages: &messages
+  - role: system
+    content: |
+      You are a skill router for a coding agent that works with YDB
+      (open-source distributed SQL DBMS — https://ydb.tech).
+
+      Below is the list of installed skills with their selector
+      descriptions. Given a user request, decide which single skill —
+      if any — should load to answer it.
+
+      Reply with exactly one token, lowercase, no surrounding text:
+        - the skill slug (e.g. `ydb-table`) if one applies,
+        - `none` if the request is unrelated to YDB or to any
+          installed skill.
+
+      Do not output prose, quotes, code fences, or explanations. One
+      token. Nothing else.
+
+      ═════════════════════════════════════════════════════════════
+      INSTALLED SKILLS
+      ═════════════════════════════════════════════════════════════
+      {{ skill_descriptions }}
+  - role: user
+    content: "{{ user_prompt }}"
+
+providers:
+  # Closed
+  - id: https:anthropic/claude-sonnet-4.6
+    label: Anthropic · Sonnet 4.6
+    config:
+      <<: *http
+      body:
+        model: "anthropic/claude-sonnet-4.6"
+        messages: *messages
+        temperature: 0.0
+        max_tokens: 256
+  - id: https:google/gemini-2.5-pro
+    label: Google · Gemini 2.5 Pro
+    config:
+      <<: *http
+      body:
+        model: "google/gemini-2.5-pro"
+        messages: *messages
+        temperature: 0.0
+        max_tokens: 256
+  - id: https:openai/gpt-5.4
+    label: OpenAI · GPT-5.4
+    config:
+      <<: *http
+      body:
+        model: "openai/gpt-5.4"
+        messages: *messages
+        temperature: 0.0
+        max_tokens: 256
+
+  # Open-source
+  - id: https:qwen/qwen3-coder
+    label: Qwen3 Coder (flagship)
+    config:
+      <<: *http
+      body:
+        model: "qwen/qwen3-coder"
+        messages: *messages
+        temperature: 0.0
+        max_tokens: 256
+  - id: https:qwen/qwen3-coder-30b-a3b-instruct
+    label: Qwen3 Coder 30B-A3B (self-hostable)
+    config:
+      <<: *http
+      body:
+        model: "qwen/qwen3-coder-30b-a3b-instruct"
+        messages: *messages
+        temperature: 0.0
+        max_tokens: 256
+  - id: https:qwen/qwen-2.5-coder-32b-instruct
+    label: Qwen 2.5 Coder 32B (widely-deployed legacy)
+    config:
+      <<: *http
+      body:
+        model: "qwen/qwen-2.5-coder-32b-instruct"
+        messages: *messages
+        temperature: 0.0
+        max_tokens: 256
+  - id: https:deepseek/deepseek-v3.2
+    label: DeepSeek v3.2
+    config:
+      <<: *http
+      body:
+        model: "deepseek/deepseek-v3.2"
+        messages: *messages
+        temperature: 0.0
+        max_tokens: 256
+  - id: https:mistralai/devstral-2512
+    label: Mistral Devstral 2512
+    config:
+      <<: *http
+      body:
+        model: "mistralai/devstral-2512"
+        messages: *messages
+        temperature: 0.0
+        max_tokens: 256
+  - id: https:openai/gpt-oss-120b
+    label: OpenAI gpt-oss-120b (open weights)
+    config:
+      <<: *http
+      body:
+        model: "openai/gpt-oss-120b"
+        messages: *messages
+        temperature: 0.0
+        max_tokens: 256
+  - id: https:meta-llama/llama-4-maverick
+    label: Meta Llama 4 Maverick
+    config:
+      <<: *http
+      body:
+        model: "meta-llama/llama-4-maverick"
+        messages: *messages
+        temperature: 0.0
+        max_tokens: 256
+  - id: https:z-ai/glm-4.6
+    label: Z.ai GLM 4.6
+    config:
+      <<: *http
+      body:
+        model: "z-ai/glm-4.6"
+        messages: *messages
+        temperature: 0.0
+        max_tokens: 256
+  - id: https:moonshotai/kimi-k2
+    label: Moonshot Kimi K2
+    config:
+      <<: *http
+      body:
+        model: "moonshotai/kimi-k2"
+        messages: *messages
+        temperature: 0.0
+        max_tokens: 256
+
+prompts:
+  - "{{ user_prompt }}"
+
+defaultTest:
+  vars:
+    # Generated from skills/*/SKILL.md frontmatter by
+    # scripts/extract-descriptions.py — keep in sync via the validator.
+    skill_descriptions: file://tests/routing/descriptions.md
+  # Defensive: an upstream error sometimes lands as a plain string in
+  # the response; without this guard the regex below could match the
+  # word "ydb-table" buried in an error payload.
+  assert:
+    - type: not-contains
+      value: "[provider error]"
+
+# Routing tests are discovered from tests/routing/*.yaml.
+tests:
+  - file://tests/routing/*.yaml

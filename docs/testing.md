@@ -123,6 +123,36 @@ python3 scripts/validate-skills.py
 
 Exit code 0 = all checks passed; 1 = at least one violation, printed to stderr with file path and reason. Use this before opening a PR to catch the cheap mistakes without burning a promptfoo run.
 
+## Routing matrix
+
+A second promptfoo config — `promptfooconfig.routing.yaml` — tests the
+selector behavior instead of the ceiling. The system prompt contains only
+each skill's `description:` field (extracted from `SKILL.md` frontmatter
+by `scripts/extract-descriptions.py` into `tests/routing/descriptions.md`);
+no skill body is loaded. The model is asked to reply with one token — the
+slug of the skill that should fire, or `none`.
+
+This approximates what Claude Code / Cursor / Codex do internally when they
+decide which skill to load. It catches two failure modes the ceiling matrix
+can't see:
+
+- **False negatives** — `description:` is too narrow; valid requests don't
+  trigger the skill at all.
+- **False positives** — `description:` is too broad; the skill loads on
+  unrelated requests (worse than not loading — the agent reads irrelevant
+  context).
+
+Run it the same way as the main matrix, with `-c`:
+
+```bash
+npx promptfoo@latest eval -c promptfooconfig.routing.yaml
+```
+
+Asserts are deterministic regex (no LLM grader) — cheap to re-run after
+any `description:` edit. `scripts/validate-skills.py` calls
+`extract-descriptions.py --check` and fails if `tests/routing/descriptions.md`
+is stale relative to the SKILL.md frontmatter.
+
 ## Runtime-level testing (known gap)
 
 This setup tests models. It does not test runtimes — Claude Code / Cursor / Windsurf / Codex / Gemini CLI each have their own skill-loading mechanics (description-first routing, varying system-prompt construction, different tool sets) that can change the outcome from what the matrix shows.
