@@ -111,7 +111,6 @@ Official under https://github.com/ydb-platform/ unless noted.
 - **Python**: SQLAlchemy dialect `ydb-sqlalchemy` (PyPI). URL scheme: `yql+ydb://localhost:2136/local`.
 - **Go**: GORM driver `gorm-driver`; `golang-migrate` fork with a `ydb` driver.
 - **JVM**: JDBC driver (see packages) is the gateway. `ydb-java-dialects` monorepo contains Hibernate 5/6, Spring Data JDBC, JOOQ, Liquibase, Flyway modules. Native ORM `yoj-project` for immutable entities.
-- **.NET**: `EntityFrameworkCore.Ydb` on NuGet (source under ydb-dotnet-sdk).
 - **Spark**: `ydb-spark-connector`.
 - **Terraform**:
   - Schema objects (tables, indexes, changefeeds) inside a YDB database — `terraform-provider-ydb` (experimental).
