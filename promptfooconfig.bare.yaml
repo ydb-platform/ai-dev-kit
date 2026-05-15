@@ -1,0 +1,219 @@
+# A/B control matrix: same tests + providers as promptfooconfig.yaml,
+# but no skill content in the system prompt. Measures what the model
+# already knows about YDB from training, without our skills loaded.
+#
+# Compared against the main matrix to answer: "for each claim in the
+# skill, does the skill actually do work, or is it redundant with what
+# the model already knows?"
+#
+# Quadrants the comparison script reads out:
+#   skill PASS + bare PASS  →  REDUNDANT     (candidate for removal)
+#   skill PASS + bare FAIL  →  SKILL WORKS   (load-bearing — keep)
+#   skill FAIL + bare PASS  →  SKILL HARMS   (rare; investigate)
+#   skill FAIL + bare FAIL  →  INSUFFICIENT  (text exists but isn't enough)
+#
+# Usage:
+#   export OPENROUTER_API_KEY="..."
+#   npx promptfoo@latest eval                            # main (skill loaded)
+#   npx promptfoo@latest eval -c promptfooconfig.bare.yaml   # bare
+#   python3 scripts/ab-compare.py                        # diff the two
+
+description: YDB skills A/B control (bare — no skill content loaded)
+
+_http_base: &http
+  method: POST
+  url: "https://openrouter.ai/api/v1/chat/completions"
+  headers:
+    Content-Type: application/json
+    Authorization: "Bearer {{ env.OPENROUTER_API_KEY }}"
+  transformResponse: json.choices[0].message.content
+
+# Same framing as the main system prompt MINUS the skill content. Keeps
+# the YDB-aware preamble and the "be concise / be honest" rules so the
+# only delta between this and the main matrix is the presence of skill
+# bodies.
+_messages: &messages
+  - role: system
+    content: |
+      You are a coding assistant helping a user work with YDB — an
+      open-source distributed SQL database (https://ydb.tech). Answer
+      from general knowledge. Be honest about what you don't know: if
+      a YDB-specific detail isn't something you're confident about,
+      say so rather than guessing.
+
+      Be concise. Answer in the minimum words and code the user
+      actually needs — no "Great question!" openings, no recap of what
+      the user asked, no closing "let me know if …" paragraphs, no
+      marketing. Code snippets over prose when applicable. Aim for
+      under 300 words unless the task genuinely needs more.
+  - role: user
+    content: "{{ user_prompt }}"
+
+providers:
+  # ── Closed ─────────────────────────────────────────────────────────────
+  - id: https:anthropic/claude-sonnet-4.6
+    label: Anthropic · Sonnet 4.6 (baseline)
+    config:
+      <<: *http
+      body:
+        model: "anthropic/claude-sonnet-4.6"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:google/gemini-2.5-pro
+    label: Google · Gemini 2.5 Pro
+    config:
+      <<: *http
+      body:
+        model: "google/gemini-2.5-pro"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:openai/gpt-5.4
+    label: OpenAI · GPT-5.4
+    config:
+      <<: *http
+      body:
+        model: "openai/gpt-5.4"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+
+  # ── Open-source ────────────────────────────────────────────────────────
+  - id: https:qwen/qwen3-coder
+    label: Qwen3 Coder (flagship)
+    config:
+      <<: *http
+      body:
+        model: "qwen/qwen3-coder"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:qwen/qwen3-coder-30b-a3b-instruct
+    label: Qwen3 Coder 30B-A3B (self-hostable)
+    config:
+      <<: *http
+      body:
+        model: "qwen/qwen3-coder-30b-a3b-instruct"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:qwen/qwen-2.5-coder-32b-instruct
+    label: Qwen 2.5 Coder 32B (widely-deployed legacy)
+    config:
+      <<: *http
+      body:
+        model: "qwen/qwen-2.5-coder-32b-instruct"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:deepseek/deepseek-v3.2
+    label: DeepSeek v3.2
+    config:
+      <<: *http
+      body:
+        model: "deepseek/deepseek-v3.2"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:mistralai/devstral-2512
+    label: Mistral Devstral 2512
+    config:
+      <<: *http
+      body:
+        model: "mistralai/devstral-2512"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:openai/gpt-oss-120b
+    label: OpenAI gpt-oss-120b (open weights)
+    config:
+      <<: *http
+      body:
+        model: "openai/gpt-oss-120b"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:meta-llama/llama-4-maverick
+    label: Meta Llama 4 Maverick
+    config:
+      <<: *http
+      body:
+        model: "meta-llama/llama-4-maverick"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:z-ai/glm-4.6
+    label: Z.ai GLM 4.6
+    config:
+      <<: *http
+      body:
+        model: "z-ai/glm-4.6"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:moonshotai/kimi-k2
+    label: Moonshot Kimi K2
+    config:
+      <<: *http
+      body:
+        model: "moonshotai/kimi-k2"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+
+prompts:
+  - "{{ user_prompt }}"
+
+defaultTest:
+  assert:
+    - type: not-contains
+      value: "[provider error]"
+  options:
+    provider:
+      id: https:anthropic/claude-sonnet-4.6-grader
+      config:
+        <<: *http
+        body:
+          model: "anthropic/claude-sonnet-4.6"
+          messages:
+            - role: user
+              content: "{{ prompt }}"
+          temperature: 0.0
+          max_tokens: 1024
+    # Bare-mode rubric: same standards as the main matrix, but no
+    # mention of "loaded skill content" — the model is supposed to
+    # answer from general knowledge here. Wording the rubric to require
+    # skill-grounding would make every bare response fail by
+    # construction and destroy the comparison.
+    rubricPrompt: |
+      Grade whether an AI assistant's response substantively addressed a
+      user's YDB question and satisfied the rubric criteria.
+
+      USER PROMPT:
+      {{ user_prompt }}
+
+      ASSISTANT RESPONSE:
+      {{ output }}
+
+      RUBRIC:
+      {{ rubric }}
+
+      Rules:
+      - Generic "I'm ready to help" greetings, empty refusals, requests
+        for clarification when the user already gave enough detail, or
+        answers to a different question → FAIL.
+      - Partial but substantive answers that miss a minor criterion →
+        may PASS with score < 1.
+      - A correct response must clearly attempt to satisfy the rubric's
+        key criteria — grounded in factual knowledge of YDB. The model
+        does NOT have any skill content loaded for this run; grade the
+        answer on its own merits.
+
+      Reply with ONE line — a single JSON object, no code fence, no prose:
+      {"pass": true|false, "score": 0.0, "reason": "…"}
+
+# Same tests as the main matrix.
+tests:
+  - file://tests/ydb-core/*.yaml
+  - file://tests/ydb-table/*.yaml
