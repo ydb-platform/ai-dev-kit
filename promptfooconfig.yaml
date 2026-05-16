@@ -68,18 +68,27 @@ _messages: &messages
     content: "{{ user_prompt }}"
 
 providers:
-  # ── Cloud baselines (one per vendor family) ────────────────────────────
-  - id: https:anthropic/claude-sonnet-4.6
-    label: Anthropic · Sonnet 4.6 (baseline)
+  # ── Frontier · closed (cloud-API customers) ────────────────────────────
+  - id: https:anthropic/claude-opus-4.7
+    label: Frontier · Anthropic Opus 4.7
     config:
       <<: *http
       body:
-        model: "anthropic/claude-sonnet-4.6"
+        model: "anthropic/claude-opus-4.7"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:openai/gpt-5.3-codex
+    label: Frontier · OpenAI GPT-5.3 Codex
+    config:
+      <<: *http
+      body:
+        model: "openai/gpt-5.3-codex"
         messages: *messages
         temperature: 0.2
         max_tokens: 2048
   - id: https:google/gemini-2.5-pro
-    label: Google · Gemini 2.5 Pro
+    label: Frontier · Google Gemini 2.5 Pro
     config:
       <<: *http
       body:
@@ -87,95 +96,61 @@ providers:
         messages: *messages
         temperature: 0.2
         max_tokens: 2048
-  - id: https:openai/gpt-5.4
-    label: OpenAI · GPT-5.4
+
+  # ── Frontier · open-source (enterprise on-prem inference) ──────────────
+  - id: https:deepseek/deepseek-v4-pro
+    label: Frontier OSS · DeepSeek v4-Pro
     config:
       <<: *http
       body:
-        model: "openai/gpt-5.4"
+        model: "deepseek/deepseek-v4-pro"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:moonshotai/kimi-k2.6
+    label: Frontier OSS · Moonshot Kimi K2.6
+    config:
+      <<: *http
+      body:
+        model: "moonshotai/kimi-k2.6"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:qwen/qwen3-coder-plus
+    label: Frontier OSS · Qwen3 Coder Plus
+    config:
+      <<: *http
+      body:
+        model: "qwen/qwen3-coder-plus"
         messages: *messages
         temperature: 0.2
         max_tokens: 2048
 
-  # ── Open-source (the set enterprise customers self-host) ───────────────
-  - id: https:qwen/qwen3-coder
-    label: Qwen3 Coder (flagship)
+  # ── Laptop · Ollama-runnable (dev workstation, 16–32 GB RAM) ───────────
+  - id: https:openai/gpt-oss-20b
+    label: Laptop · OpenAI gpt-oss-20b
     config:
       <<: *http
       body:
-        model: "qwen/qwen3-coder"
+        model: "openai/gpt-oss-20b"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:mistralai/devstral-small
+    label: Laptop · Mistral Devstral Small
+    config:
+      <<: *http
+      body:
+        model: "mistralai/devstral-small"
         messages: *messages
         temperature: 0.2
         max_tokens: 2048
   - id: https:qwen/qwen3-coder-30b-a3b-instruct
-    label: Qwen3 Coder 30B-A3B (self-hostable)
+    label: Laptop · Qwen3 Coder 30B-A3B
     config:
       <<: *http
       body:
         model: "qwen/qwen3-coder-30b-a3b-instruct"
-        messages: *messages
-        temperature: 0.2
-        max_tokens: 2048
-  - id: https:qwen/qwen-2.5-coder-32b-instruct
-    label: Qwen 2.5 Coder 32B (widely-deployed legacy)
-    config:
-      <<: *http
-      body:
-        model: "qwen/qwen-2.5-coder-32b-instruct"
-        messages: *messages
-        temperature: 0.2
-        max_tokens: 2048
-  - id: https:deepseek/deepseek-v3.2
-    label: DeepSeek v3.2
-    config:
-      <<: *http
-      body:
-        model: "deepseek/deepseek-v3.2"
-        messages: *messages
-        temperature: 0.2
-        max_tokens: 2048
-  - id: https:mistralai/devstral-2512
-    label: Mistral Devstral 2512
-    config:
-      <<: *http
-      body:
-        model: "mistralai/devstral-2512"
-        messages: *messages
-        temperature: 0.2
-        max_tokens: 2048
-  - id: https:openai/gpt-oss-120b
-    label: OpenAI gpt-oss-120b (open weights)
-    config:
-      <<: *http
-      body:
-        model: "openai/gpt-oss-120b"
-        messages: *messages
-        temperature: 0.2
-        max_tokens: 2048
-  - id: https:meta-llama/llama-4-maverick
-    label: Meta Llama 4 Maverick
-    config:
-      <<: *http
-      body:
-        model: "meta-llama/llama-4-maverick"
-        messages: *messages
-        temperature: 0.2
-        max_tokens: 2048
-  - id: https:z-ai/glm-4.6
-    label: Z.ai GLM 4.6
-    config:
-      <<: *http
-      body:
-        model: "z-ai/glm-4.6"
-        messages: *messages
-        temperature: 0.2
-        max_tokens: 2048
-  - id: https:moonshotai/kimi-k2
-    label: Moonshot Kimi K2
-    config:
-      <<: *http
-      body:
-        model: "moonshotai/kimi-k2"
         messages: *messages
         temperature: 0.2
         max_tokens: 2048
