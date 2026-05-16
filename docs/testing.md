@@ -8,7 +8,7 @@ The tool is [promptfoo](https://www.promptfoo.dev). One declarative `promptfooco
 
 Every eval runs this shape:
 
-- **System prompt:** the installable skills' content embedded into one system message. `ydb-core` is loaded as a single `SKILL.md`. `ydb-table` is loaded as `SKILL.md` plus its `references/bulk-write.md`, `references/transactions.md`, `references/embed/java.md`, and `rules/embed/java.md` — i.e. the full body of the skill, as if the agent had read every Load-Sources entry.
+- **System prompt:** the installable skills' content embedded into one system message. `ydb-core` is loaded as a single `SKILL.md`. `ydb-table` is loaded as `SKILL.md` plus its `references/working-with-data.md`, `references/embed/java.md`, and `rules/embed/java.md` — i.e. the full body of the skill, as if the agent had read every Load-Sources entry.
 - **User prompt:** supplied by the test case (`tests/<skill>/<case>.yaml`).
 - **Grader:** `claude-sonnet-4.6` judges each `llm-rubric` assertion against a criterion block written in plain English.
 

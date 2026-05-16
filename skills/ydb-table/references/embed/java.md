@@ -40,7 +40,7 @@ spring.jpa.properties.hibernate.order_updates=true
 
 Why: each method issues one statement instead of N. Batches form only when `batch_size` is set *and* statements are ordered — without `order_inserts` / `order_updates`, the session can't group like statements together. `deleteAllByIdInBatch` is the only delete variant that emits a single `DELETE … WHERE id IN (?, ?, …)`; `deleteAllById` does a SELECT per id before deleting.
 
-For the underlying YDB-level mechanisms (`AS_TABLE`, `BulkUpsert`), see [`../bulk-write.md`](../bulk-write.md).
+For the underlying YDB-level mechanisms (`AS_TABLE`, `BulkUpsert`), see [`../working-with-data.md`](../working-with-data.md).
 
 ## Retries
 
@@ -119,7 +119,7 @@ Note that this annotation in the example app retries `SQLTransientException` for
 
 ## Transactions
 
-YDB Query Service defaults to `SerializableRW`. Conflicting transactions are detected by the server and surface as retryable `SQLRecoverableException` (`ABORTED`). For the full mode list and the consequence for application-level optimistic locking, see [`../transactions.md`](../transactions.md).
+YDB Query Service defaults to `SerializableRW`. Conflicting transactions are detected by the server and surface as retryable `SQLRecoverableException` (`ABORTED`). For the full mode list and the consequence for application-level optimistic locking, see [`../working-with-data.md`](../working-with-data.md).
 
 ## Connection
 

@@ -17,8 +17,7 @@ Writing YQL against YDB tables, designing schemas to back those queries, and aud
 
 | Task                                                | Files to consult                                                                          |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Bulk insert / batch write (any language)            | `references/bulk-write.md`                                                                |
-| Transaction-mode question, optimistic locking       | `references/transactions.md`                                                              |
+| Reads, writes, transaction modes, batch vs bulk     | `references/working-with-data.md`                                                         |
 | Writing Java application code against YDB           | `references/embed/java.md`                                                                |
 | Auditing Java application code against YDB          | `rules/embed/java.md`                                                                     |
 | Schema design — primary key shape, partitioning     | `../ydb-core/SKILL.md#schema-basics`                                                      |
