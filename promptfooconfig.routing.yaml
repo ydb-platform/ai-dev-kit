@@ -17,6 +17,13 @@
 
 description: YDB skills routing matrix
 
+# Run knobs — bump concurrency to make full-matrix runs faster.
+# OpenRouter handles parallelism; the limiter is your key's monthly cap.
+# CLI override: `npx promptfoo eval -j <N>`.
+evaluateOptions:
+  maxConcurrency: 12
+
+
 _http_base: &http
   method: POST
   url: "https://openrouter.ai/api/v1/chat/completions"
@@ -96,6 +103,7 @@ providers:
       <<: *http
       body:
         model: "moonshotai/kimi-k2.6"
+        reasoning: { enabled: false }
         messages: *messages
         temperature: 0.0
         max_tokens: 256

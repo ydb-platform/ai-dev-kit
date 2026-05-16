@@ -33,6 +33,33 @@ npx promptfoo@latest eval         # run all tests across all providers
 npx promptfoo@latest view         # open the matrix in the browser
 ```
 
+## Speed knobs
+
+Default concurrency is set to **12** in each `promptfooconfig*.yaml` via
+`evaluateOptions.maxConcurrency`. On a healthy OpenRouter key this
+finishes the full matrix in roughly a third of the time of the
+promptfoo default (4). If your key's monthly limit caps single-request
+size or rate, lower concurrency to avoid clustered 402s:
+
+```bash
+npx promptfoo@latest eval -j 4    # CLI override for slower keys
+```
+
+Two providers benefit from extra config to avoid burning tokens on
+internal reasoning:
+
+- **Moonshot Kimi K2.6** — reasoning mode is on by default and consumes
+  the whole `max_tokens` budget on thinking before emitting any
+  visible answer. We set `reasoning: { enabled: false }` on this
+  provider so the budget goes to the actual response.
+- **Google Gemini 2.5 Pro** — same problem in principle, but the
+  OpenRouter route to Gemini rejects `reasoning: { enabled: false }`
+  with HTTP 400 ("Reasoning is mandatory for this endpoint"). Live
+  with the thinking budget; `max_tokens: 2048` is just enough.
+
+Other models on the matrix don't accept the `reasoning` parameter at
+all and return HTTP 400 if you set it — do not blanket-apply it.
+
 For a subset (faster iteration while writing a new skill or test):
 
 ```bash
