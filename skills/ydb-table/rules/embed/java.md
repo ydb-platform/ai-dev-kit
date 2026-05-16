@@ -8,7 +8,7 @@ Audit rules for application code talking to YDB via the Java stack. Each rule is
 
 **What to look for**: calls to `findById(` inside `for` / `while` / `forEach` / `stream` blocks, or repeated `findById` calls against the same repository with different ids.
 
-**Problem**: each `findById` is a separate `SELECT … WHERE id = ?` round trip; reading N keys this way costs N statements where one would do.
+**Problem**: each `findById` is one round trip to YDB and one server-side query plan. On a single-server database (PostgreSQL, MySQL), N point reads amortize against a shared buffer cache and one connection. On YDB, rows are sharded across tablets that may live on different nodes — there is no shared locality to amortize against, and N point reads from the application travel N separate routes (network round trip + query planning + tablet lookup, every time). `findAllById(ids)` collapses the application-side cost into one round trip: the server resolves all ids against the tablet map once, dispatches reads to the owning tablets in parallel server-side, and returns a single response.
 
 **Fix**:
 
@@ -24,7 +24,9 @@ List<Token> tokens = repository.findAllById(ids);
 
 **What to look for**: `application.properties` / `application.yml` files without `spring.jpa.properties.hibernate.jdbc.batch_size`, or Hibernate `persistence.xml` / `hibernate.cfg.xml` without `hibernate.jdbc.batch_size`. Also missing `hibernate.order_inserts` / `hibernate.order_updates`.
 
-**Problem**: Hibernate's default JDBC batch size is 1 — every `INSERT` / `UPDATE` / `DELETE` is a separate statement and a separate network round trip. On write-heavy paths this multiplies cost.
+**Problem**: Hibernate's default JDBC batch size is 1 — every `INSERT` / `UPDATE` / `DELETE` is a separate JDBC statement, a separate network round trip from the application, and a separate query plan on the server. On YDB this hurts in two places at once: the network/RPC layer carries one frame per statement, and the server-side query layer resolves the tablet map and rebuilds the plan per statement. Rows are sharded across tablets across nodes, so there's no single locality the server can use to amortize.
+
+JDBC batching folds N statements into one prepared-statement batch sent in one round trip. Plan resolution amortizes over the batch; only the per-tablet writes still scale with N, and the server dispatches them to the owning tablets in parallel. Batches form only when **both** `batch_size` and the ordering flags are set — without `order_inserts` / `order_updates`, the session can't group like statements together and the batch_size setting silently does nothing.
 
 **Fix**:
 
@@ -34,7 +36,7 @@ spring.jpa.properties.hibernate.order_inserts=true
 spring.jpa.properties.hibernate.order_updates=true
 ```
 
-Batches form only when both batch size and ordering are enabled — without `order_inserts` / `order_updates`, the session can't group like statements together. The upstream `ydb-token-app` example (`ydb-java-examples/jdbc/ydb-token-app/src/main/resources/application.properties`) uses `batch_size=1000`.
+The upstream `ydb-token-app` example (`ydb-java-examples/jdbc/ydb-token-app/src/main/resources/application.properties`) uses `batch_size=1000`.
 
 **Source**: Hibernate user guide — JDBC batching configuration. <https://docs.hibernate.org/orm/6.6/userguide/html_single/#batch>. YDB JDBC driver examples: <https://github.com/ydb-platform/ydb-jdbc-driver>.
 
@@ -44,7 +46,7 @@ Batches form only when both batch size and ordering are enabled — without `ord
 
 **What to look for**: `repository.save(` (or `entityManager.persist(`) inside `for` / `while` / `forEach` / `stream` blocks.
 
-**Problem**: per-entity save defeats batching even when `hibernate.jdbc.batch_size` is set. Multiplicative cost with RULE-JV-02.
+**Problem**: per-entity `save()` (or `entityManager.persist()`) defeats JDBC batching even when `hibernate.jdbc.batch_size` is set — the session flushes per call, so each save becomes its own JDBC statement, its own round trip to YDB, and its own server-side query plan. On YDB the cost compounds with RULE-JV-02: the per-statement plan/route overhead can't be amortized, and the writes can't be dispatched to their owning tablets in parallel because they arrive one at a time. `saveAll(batch)` queues all entities for one session flush, so Hibernate emits one batched JDBC statement and the server fans out writes to the owning tablets internally.
 
 **Fix**:
 
