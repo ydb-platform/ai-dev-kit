@@ -22,3 +22,9 @@ assert:
         prevent runaway splitting.
 
       Full fail if the recommended PK is just `(event_id)` with no hash prefix.
+      Full fail if the response does not mention all three of
+      `AUTO_PARTITIONING_BY_LOAD`, `AUTO_PARTITIONING_MIN_PARTITIONS_COUNT`,
+      and `AUTO_PARTITIONING_MAX_PARTITIONS_COUNT` — those are the YDB-specific
+      knobs the skill teaches; an answer that recommends a composite PK
+      with a hash prefix but stops there is generic database advice, not
+      a YDB-grounded answer.
