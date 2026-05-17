@@ -37,3 +37,40 @@ for {
 ```
 
 **Source**: `ydb-platform/ydb-go-sdk/MIGRATION_v2_v3.md` — section "About truncated result" documents the 1000-row default and the v3 non-retryable-error behavior. <https://github.com/ydb-platform/ydb-go-sdk/blob/master/MIGRATION_v2_v3.md>.
+
+### RULE-GO-02: External state mutation from inside the `Do`/`DoTx` retry closure
+
+**Severity**: High
+
+**What to look for**: assignments to variables declared outside the `db.Query().Do(...)` / `db.Table().Do(...)` / `DoTx(...)` lambda — `append(outerSlice, ...)`, `outerMap[k] = v`, `outerResult, err = s.Execute(...)`. Anything where state crosses the closure boundary.
+
+**Problem**: the `Do`/`DoTx` closure is the unit of work — SDK invokes it again on every retryable error (transaction conflict, network transient, session loss). All data processing must happen *inside* the closure. Mutations to external state survive across attempts and produce wrong values: `append` to an outer slice duplicates on retry, an outer `Result` reference may end up holding a stream from a failed attempt, an outer map accumulates entries from partial reads. The closure crosses only one thing back: the success/failure decision. A value the caller needs is built atomically inside on the successful attempt and assigned to the outer variable only at the end, after the closure body has reached that line cleanly.
+
+**Fix**:
+
+```go
+// BAD: external slice — duplicates on retry
+var users []User
+err := db.Query().Do(ctx, func(ctx context.Context, s query.Session) error {
+    res, err := s.Query(ctx, `SELECT id, name FROM users`)
+    if err != nil { return err }
+    defer res.Close(ctx)
+    // scan rows, append directly to outer `users`
+    users = append(users, scanned...)
+    return nil
+}, query.WithIdempotent())
+
+// GOOD: build per-attempt local; assign to outer only on the path to return nil
+var users []User
+err := db.Query().Do(ctx, func(ctx context.Context, s query.Session) error {
+    res, err := s.Query(ctx, `SELECT id, name FROM users`)
+    if err != nil { return err }
+    defer res.Close(ctx)
+    var attempt []User
+    // scan rows into attempt
+    users = attempt
+    return nil
+}, query.WithIdempotent())
+```
+
+**Source**: `ydb-platform/ydb-go-sdk` — `Do`/`DoTx` retry contract. <https://github.com/ydb-platform/ydb-go-sdk>.
