@@ -52,8 +52,8 @@ internal reasoning:
   the whole `max_tokens` budget on thinking before emitting any
   visible answer. We set `reasoning: { enabled: false }` on this
   provider so the budget goes to the actual response.
-- **Google Gemini 2.5 Pro** — same problem in principle, but the
-  OpenRouter route to Gemini rejects `reasoning: { enabled: false }`
+- **Google Gemini 3.1 Pro (preview)** — same problem in principle, but
+  the OpenRouter route to Gemini rejects `reasoning: { enabled: false }`
   with HTTP 400 ("Reasoning is mandatory for this endpoint"). Live
   with the thinking budget; `max_tokens: 2048` is just enough.
 

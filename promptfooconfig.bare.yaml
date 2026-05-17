@@ -76,12 +76,12 @@ providers:
         messages: *messages
         temperature: 0.2
         max_tokens: 2048
-  - id: https:google/gemini-2.5-pro
-    label: Frontier · Google Gemini 2.5 Pro
+  - id: https:google/gemini-3.1-pro-preview
+    label: Frontier · Google Gemini 3.1 Pro (preview)
     config:
       <<: *http
       body:
-        model: "google/gemini-2.5-pro"
+        model: "google/gemini-3.1-pro-preview"
         messages: *messages
         temperature: 0.2
         max_tokens: 2048
@@ -106,12 +106,12 @@ providers:
         messages: *messages
         temperature: 0.2
         max_tokens: 2048
-  - id: https:qwen/qwen3-coder-plus
-    label: Frontier OSS · Qwen3 Coder Plus
+  - id: https:qwen/qwen3.6-plus
+    label: Frontier OSS · Qwen3.6 Plus
     config:
       <<: *http
       body:
-        model: "qwen/qwen3-coder-plus"
+        model: "qwen/qwen3.6-plus"
         messages: *messages
         temperature: 0.2
         max_tokens: 2048
@@ -135,15 +135,18 @@ providers:
         messages: *messages
         temperature: 0.2
         max_tokens: 2048
-  - id: https:qwen/qwen3-coder-30b-a3b-instruct
-    label: Laptop · Qwen3 Coder 30B-A3B
+  - id: https:qwen/qwen3.6-35b-a3b
+    label: Laptop · Qwen3.6 35B-A3B
     config:
       <<: *http
       body:
-        model: "qwen/qwen3-coder-30b-a3b-instruct"
+        model: "qwen/qwen3.6-35b-a3b"
         messages: *messages
         temperature: 0.2
-        max_tokens: 2048
+        # Reasoning model: 2048 was eaten by the thinking budget and
+        # answers came back truncated mid-token. 8192 covers thinking
+        # plus the final answer.
+        max_tokens: 8192
 
 prompts:
   - "{{ user_prompt }}"
