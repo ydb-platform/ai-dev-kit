@@ -95,6 +95,7 @@ Rule IDs have the shape `RULE-<PREFIX>-<NN>`. Prefixes are **not pre-allocated**
 | Prefix | Scope | First used in |
 |--------|-------|---------------|
 | JV | Java SDK / JDBC / Hibernate / Spring Data anti-patterns | skills/ydb-table/rules/embed/java.md |
+| GO | Go SDK (`ydb-go-sdk/v3`) — driver, sessions, query/table services, retry, transactions | skills/ydb-table/rules/embed/go.md |
 
 ### Severity labels
 
