@@ -49,8 +49,13 @@ assert:
         custom one doesn't: exponential backoff with jitter,
         session-pool integration, idempotency-aware retry of
         conditional failures via `WithIdempotent`.
-      - Recommend deleting the helper and using `db.Query().Do(ctx,
-        func(...) error { ... }, query.WithIdempotent())` directly.
+      - Recommend deleting the helper and replacing it with the SDK
+        retrier appropriate to the surface — for this Table Service
+        snippet, `db.Table().Do(ctx, func(ctx, s table.Session) error
+        { ... }, table.WithIdempotent())`; on Query Service code,
+        `db.Query().Do(ctx, ..., query.WithIdempotent())`; or the
+        lower-level `retry.Retry(...)` from the `retry/` package
+        when neither client-level helper applies.
 
       Full fail if the response only complains about backoff strategy
       (fixed delay vs exponential) without naming the YDB error
