@@ -37,17 +37,21 @@ assert:
         text; with values inlined, every distinct call produces a new
         text and a new plan compilation.
       - Recommend binding the values via
-        `ydb.ParamsBuilder().Param("$namePrefix").Text(namePrefix).
+        `ydb.ParamsBuilder().Param("$namePrefix").Text(namePrefix + "%").
         Param("$minAge").Int32(int32(minAge)).Build()` (or an
         equivalent matching-type call — `minAge` in the prompt is a
         Go `int` and the typed parameter builder is type-strict, so a
         cast or a parameter-type choice that accepts `int` is required)
-        passed to `query.WithParameters(...)`. A leading `DECLARE`
-        block is optional in modern YDB (types are inferred from the
-        bound values) and is fine to mention as an explicit-contract
-        addition but not required.
+        passed to `query.WithParameters(...)`. The trailing `%` of the
+        prefix-LIKE predicate must be preserved — either by appending
+        it to the bound `Text` value (as above) or by keeping the `%`
+        in the YQL itself (`name LIKE $namePrefix || "%"u`). A leading
+        `DECLARE` block is optional in modern YDB (types are inferred
+        from the bound values) and is fine to mention as an
+        explicit-contract addition but not required.
 
       Full fail if the response only mentions SQL injection without
       naming the plan-cache consequence, or only mentions plan caching
       without naming SQL injection, or if it requires a `DECLARE` block
-      as part of the fix.
+      as part of the fix, or if its proposed fix drops the prefix `%`
+      (turning the predicate from prefix-LIKE into equality match).

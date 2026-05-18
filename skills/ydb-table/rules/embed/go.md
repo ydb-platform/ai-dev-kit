@@ -13,7 +13,7 @@ Audit rules for application code talking to YDB through the Go SDK. Each rule is
 **Fix** — pick one of two structural paths; both are valid:
 
 - **Switch to Query Service streaming**: rewrite the read through `db.Query().Do(ctx, func(ctx, s query.Session) error { res, err := s.Query(ctx, sql, query.WithParameters(...)); ... })`. The Query Service streams the result set without the 1000-row cap, so a code-side `for` over `res.ResultSets(...) / .Rows(...)` exhausts the full match in one call.
-- **Keyset-paginate through whichever surface you're already on**: wrap the call in an outer `for` loop with a cursor predicate (`WHERE pk_col > $cursor ORDER BY pk_col LIMIT N`) and terminate when a page returns zero rows. Works on both Table Service (each page is one `Do` invocation) and Query Service.
+- **Keyset-paginate through whichever surface you're already on**: wrap the call in an outer `for` loop with a cursor predicate and `ORDER BY` over the table's primary key, terminate when a page returns zero rows.
 
 `ydb.WithIgnoreTruncated` is not a fix — it silences the signal without addressing the structural problem.
 

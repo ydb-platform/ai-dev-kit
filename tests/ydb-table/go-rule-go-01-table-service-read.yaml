@@ -60,10 +60,10 @@ assert:
         is data-dependent and not catchable by tests on a small dev
         dataset.
       - Recommend redesigning the read to exhaust the result set —
-        keyset pagination (`WHERE user_id > $lastID ORDER BY user_id LIMIT N`
-        wrapped in an outer loop that terminates when a page comes back
-        empty) or the Query Service streaming path. The fix is structural,
-        not a knob.
+        keyset pagination over the table's primary key, wrapped in an
+        outer loop that terminates when a page comes back empty, or
+        the Query Service streaming path. The fix is structural, not
+        a knob.
       - Not invent a different RULE-GO-XX ID that isn't in the loaded rules
         file.
 
