@@ -54,7 +54,7 @@ Audit rules for application code talking to YDB through the Go SDK. Each rule is
 
 **What to look for**: `for` loop with explicit `time.Sleep(...)` between attempts, calling `s.Execute(...)` / `s.Query(...)` / `db.Query().Do(...)` inside.
 
-**Fix**: delete the custom loop and use the SDK retrier (`db.Query().Do`, `db.Table().Do`, `retry.Retry` from `retry/`). A hand-rolled retrier doesn't see YDB's error classification — it retries non-retryable failures, fails on conditionally-retryable ones, has no idempotency awareness, no exponential backoff with jitter, no session-pool integration. Configuration belongs in retry options, not in caller-side `for`/`Sleep` code.
+**Fix**: delete the custom loop and use the SDK retrier (`db.Query().Do`, `db.Table().Do`, `retry.Retry` from `retry/`). A hand-rolled retrier doesn't see YDB's error classification — it replays every non-nil error indiscriminately: non-retryable failures (`PRECONDITION_FAILED`, schema mismatch) burn the retry budget, and conditionally-retryable failures (transport drops where the server may have committed) get retried with no idempotency gate, which can double-apply a non-idempotent write. The SDK retrier classifies via `retry/mode.go` `MustRetry(isOperationIdempotent bool)` and only retries the conditional bucket when `WithIdempotent` is set. Backoff with jitter and session-pool integration also come from the SDK retrier, not from caller-side `for`/`Sleep` code.
 
 **Source**: `ydb-platform/ydb-go-sdk/retry/retry.go` and `retry/backoff.go`. <https://github.com/ydb-platform/ydb-go-sdk/blob/master/retry/retry.go>.
 

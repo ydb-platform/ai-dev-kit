@@ -39,8 +39,12 @@ assert:
         which knows YDB's error classification: non-retryable,
         unconditionally-retryable, and conditionally-retryable
         (idempotency-gated). A hand-rolled for/Sleep loop can't see
-        this — it retries on non-retryable errors and silently skips
-        conditional ones.
+        this — it replays every non-nil error: it burns the budget
+        retrying non-retryable failures (e.g. `PRECONDITION_FAILED`,
+        schema mismatch) and replays conditionally-retryable ones
+        (transport drops where the server may have committed) without
+        an idempotency check, which can double-apply a non-idempotent
+        write.
       - Identify additional things the SDK retrier provides that the
         custom one doesn't: exponential backoff with jitter,
         session-pool integration, idempotency-aware retry of
