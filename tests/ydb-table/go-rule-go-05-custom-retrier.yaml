@@ -1,0 +1,53 @@
+description: Go audit · Custom retrier with time.Sleep (RULE-GO-05)
+
+vars:
+  user_prompt: |
+    Review this Go helper. It's used across the codebase to retry YDB
+    calls. Is this the right way to do retries?
+
+    ```go
+    func withRetry(ctx context.Context, fn func(ctx context.Context) error) error {
+        const maxAttempts = 10
+        var lastErr error
+        for i := 0; i < maxAttempts; i++ {
+            if err := fn(ctx); err == nil {
+                return nil
+            } else {
+                lastErr = err
+            }
+            time.Sleep(time.Duration(i+1) * 200 * time.Millisecond)
+        }
+        return lastErr
+    }
+
+    // usage
+    err := withRetry(ctx, func(ctx context.Context) error {
+        _, err := db.Table().CreateSession(ctx)
+        if err != nil { return err }
+        // ... use session ...
+        return nil
+    })
+    ```
+
+assert:
+  - type: llm-rubric
+    value: |
+      The response should:
+      - Cite `RULE-GO-05` by ID (custom retrier wrapping YDB calls).
+      - Explain that ydb-go-sdk ships its own retrier (`db.Query().Do`,
+        `db.Table().Do`, `retry.Retry` from the `retry/` package)
+        which knows YDB's error classification: non-retryable,
+        unconditionally-retryable, and conditionally-retryable
+        (idempotency-gated). A hand-rolled for/Sleep loop can't see
+        this — it retries on non-retryable errors and silently skips
+        conditional ones.
+      - Identify additional things the SDK retrier provides that the
+        custom one doesn't: exponential backoff with jitter,
+        session-pool integration, idempotency-aware retry of
+        conditional failures via `WithIdempotent`.
+      - Recommend deleting the helper and using `db.Query().Do(ctx,
+        func(...) error { ... }, query.WithIdempotent())` directly.
+
+      Full fail if the response only complains about backoff strategy
+      (fixed delay vs exponential) without naming the YDB error
+      classification gap.
