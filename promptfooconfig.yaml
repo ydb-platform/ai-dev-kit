@@ -69,6 +69,9 @@ _messages: &messages
       --- ydb-table / rules / embed / java.md ---
       {{ ydb_table_rules_java }}
 
+      --- ydb-table / references / embed / go.md ---
+      {{ ydb_table_refs_go }}
+
       --- ydb-table / rules / embed / go.md ---
       {{ ydb_table_rules_go }}
   - role: user
@@ -184,6 +187,7 @@ defaultTest:
     ydb_table_refs_working_with_data: file://skills/ydb-table/references/working-with-data.md
     ydb_table_refs_java: file://skills/ydb-table/references/embed/java.md
     ydb_table_rules_java: file://skills/ydb-table/rules/embed/java.md
+    ydb_table_refs_go: file://skills/ydb-table/references/embed/go.md
     ydb_table_rules_go: file://skills/ydb-table/rules/embed/go.md
   # Hard pre-filter: any output that came back as the defensive
   # "[provider error] ..." stub is a fail regardless of what the grader says.
