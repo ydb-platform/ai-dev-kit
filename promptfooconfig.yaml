@@ -143,7 +143,10 @@ providers:
         model: "openai/gpt-oss-20b"
         messages: *messages
         temperature: 0.2
-        max_tokens: 2048
+        # gpt-oss-20b is a thinking model; 2048 tokens get eaten by the
+        # reasoning budget and the visible answer comes back empty or
+        # truncated. 8192 matches the budget given to Qwen3.6 35B-A3B.
+        max_tokens: 8192
   - id: https:mistralai/devstral-small
     label: Laptop · Mistral Devstral Small
     config:
