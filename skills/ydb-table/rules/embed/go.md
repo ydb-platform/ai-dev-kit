@@ -6,11 +6,16 @@ Audit rules for application code talking to YDB through the Go SDK. Each rule is
 
 **Severity**: Critical
 
-**What to look for**: `s.Execute(ctx, ..., "SELECT ...")` or `s.StreamExecuteScanQuery(...)` inside `db.Table().Do(...)`, with no outer keyset-pagination loop. Also any `ydb.WithIgnoreTruncated` on the driver — that option silences the v3 error and restores v2-style silent truncation, which is what the rule exists to prevent.
+**What to look for**: `s.Execute(ctx, ..., "SELECT ...")` or `s.StreamExecuteScanQuery(...)` inside `db.Table().Do(...)` where the read is **intended to exhaust a result set** — an unbounded `SELECT` (no `WHERE` key match), a `SELECT ... WHERE billed = false` / `WHERE created_at > $cutoff` over an unbounded range, anything followed by a code-side `for ... res.NextRow()` that processes the full match — and there is no outer keyset-pagination loop wrapping the `Do` call. A bounded point read (`WHERE id = $id LIMIT 1`) or a small explicit `LIMIT N` where the caller cannot accept more than N rows by construction is not the target of this rule. Also flag any `ydb.WithIgnoreTruncated` on the driver — that option silences the v3 error and restores v2-style silent truncation, which is what the rule exists to prevent.
 
 **Problem**: Table Service caps query results at 1000 rows by default. In v3 the cap surfaces — `s.Execute` returns a non-retryable error and `s.StreamExecuteScanQuery` returns a retryable one (so it loops until the retry budget exhausts). Either way the code does not get the full result set. The architectural problem is that code written assuming "one `Execute` returns everything matching" is wrong by construction: it works in dev with small data, errors out in production once the match crosses the cap, and the common reflex — pass `ydb.WithIgnoreTruncated` to "fix" the error — restores v2-style silent truncation where the call returns `err == nil` with the first 1000 rows of the match and everything beyond the cap dropped on the floor, and downstream code under-bills / under-processes without any signal. The cap is a design constraint, not a knob.
 
-**Fix**: drive the read to exhaustion through keyset pagination — an outer `for` loop wrapping `db.Query().Do(...)`, with a cursor predicate (`WHERE pk_col > $cursor ORDER BY pk_col LIMIT N`) and termination when a page returns zero rows. Read through `db.Query()` (Query Service streams without the row cap), not `db.Table()`. Adding `ydb.WithIgnoreTruncated` is not a fix.
+**Fix** — pick one of two structural paths; both are valid:
+
+- **Switch to Query Service streaming**: rewrite the read through `db.Query().Do(ctx, func(ctx, s query.Session) error { res, err := s.Query(ctx, sql, query.WithParameters(...)); ... })`. The Query Service streams the result set without the 1000-row cap, so a code-side `for` over `res.ResultSets(...) / .Rows(...)` exhausts the full match in one call.
+- **Keyset-paginate through whichever surface you're already on**: wrap the call in an outer `for` loop with a cursor predicate (`WHERE pk_col > $cursor ORDER BY pk_col LIMIT N`) and terminate when a page returns zero rows. Works on both Table Service (each page is one `Do` invocation) and Query Service.
+
+`ydb.WithIgnoreTruncated` is not a fix — it silences the signal without addressing the structural problem.
 
 **Source**: `ydb-platform/ydb-go-sdk/MIGRATION_v2_v3.md` — section "About truncated result" documents the 1000-row default and the v3 non-retryable-error behavior. <https://github.com/ydb-platform/ydb-go-sdk/blob/master/MIGRATION_v2_v3.md>.
 
