@@ -45,9 +45,11 @@ assert:
         `ExecuteDataQueryOption` on the *last* `tx.Execute(...)` and
         deleting the explicit `tx.CommitTx(ctx)` call. The commit
         then rides on that final write's RPC.
-      - Make the round-trip arithmetic explicit: begin + write1 +
-        write2 + commit = 4 RPCs becomes begin+write1 + write2(commit)
-        = 2 RPCs (begin already fused via the first TxControl).
+      - Make the round-trip arithmetic explicit: with begin already
+        fused into the first `s.Execute`, the current code is 3 RPCs
+        — `begin+write1`, `write2`, `commit`. After the fix the
+        commit rides on `write2`, dropping it to 2 RPCs:
+        `begin+write1`, `write2+commit`.
 
       Full fail if the response:
       - Recommends `query.WithCommit()` (Query Service ExecuteOption,

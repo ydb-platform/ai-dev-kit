@@ -24,13 +24,14 @@ vars:
         ); err != nil {
             return err
         }
-        return tx.Exec(ctx,
+        _, err := tx.Exec(ctx,
             "INSERT INTO reservations (request_id, sku) VALUES ($rid, $sku)",
             query.WithParameters(ydb.ParamsBuilder().
                 Param("$rid").Text(reqID).
                 Param("$sku").Text(sku).Build()),
             query.WithCommit(),
         )
+        return err
     })
     ```
 
