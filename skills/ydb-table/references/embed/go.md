@@ -44,7 +44,7 @@ Source: <https://github.com/ydb-platform/ydb-go-sdk> README "Example Usage".
 YDB has two transaction styles, and `ydb-go-sdk/v3` supports both:
 
 - **Non-interactive** (default for new code) — the SDK manages the transaction inside `db.Query().DoTx(ctx, func(ctx, tx query.TxActor) error { ... })`. Per the upstream `query/client.go` godoc: *"If op TxOperation returns nil — transaction will be committed"*. Open the driver with `ydb.WithLazyTx(true)` so the begin is deferred onto the first query, and pass `query.WithCommit()` to the last write so the commit rides on its RPC — zero standalone begin/commit round-trips.
-- **Interactive** — the developer writes `s.BeginTransaction(...)` and `tx.CommitTx(...)`. Same fusing: pass `table.WithTxControl(table.BeginTx(...), ...)` on the first query and `table.CommitTx()` on the last.
+- **Interactive** — the developer writes `s.BeginTransaction(...)` and `tx.CommitTx(...)`. Same fusing, achieved by passing a `*table.TransactionControl` as the positional second argument of `s.Execute(...)` instead of running a standalone Begin first: `s.Execute(ctx, table.TxControl(table.BeginTx(table.WithSerializableReadWrite()), table.CommitTx()), query, params)` — a single RPC carries begin + write + commit. On the Query Service, the equivalent is `s.Query(ctx, sql, query.WithTxControl(...), query.WithCommit())` (txControl and commit are `ExecuteOption`s). Canonical Table Service form: <https://github.com/ydb-platform/ydb-go-sdk/blob/master/examples/ttl/series.go>.
 
 Worked non-interactive example: <https://github.com/ydb-platform/ydb-go-sdk/blob/master/examples/transaction/query/main.go>.
 

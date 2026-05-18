@@ -6,11 +6,11 @@ Audit rules for application code talking to YDB through the Go SDK. Each rule is
 
 **Severity**: Critical
 
-**What to look for**: `s.Execute(ctx, ..., "SELECT ...")` or `s.StreamExecuteScanQuery(...)` inside `db.Table().Do(...)`, with no outer keyset-pagination loop and no `res.Truncated()` check.
+**What to look for**: `s.Execute(ctx, ..., "SELECT ...")` or `s.StreamExecuteScanQuery(...)` inside `db.Table().Do(...)`, with no outer keyset-pagination loop. Also any `ydb.WithIgnoreTruncated` on the driver — that option silences the v3 error and restores v2-style silent truncation, which is what the rule exists to prevent.
 
-**Problem**: Table Service caps query results at 1000 rows by default. The cap is server-side and silent — once the matching set exceeds 1000, the call returns `err == nil` with the first 1000 rows and the rest are dropped. The bug is data-dependent: appears only when the `WHERE` clause first crosses the threshold in production, with no signal until a downstream discrepancy surfaces. The cap is a design constraint, not a knob — code must be written to exhaust the result through keyset pagination or Query Service streaming from day one. "Add a `LIMIT`" or "raise the cap" preserve the broken assumption.
+**Problem**: Table Service caps query results at 1000 rows by default. In v3 the cap surfaces — `s.Execute` returns a non-retryable error and `s.StreamExecuteScanQuery` returns a retryable one (so it loops until the retry budget exhausts). Either way the code does not get the full result set. The architectural problem is that code written assuming "one `Execute` returns everything matching" is wrong by construction: it works in dev with small data, errors out in production once the match crosses the cap, and the common reflex — pass `ydb.WithIgnoreTruncated` to "fix" the error — restores v2-style silent truncation where the call returns `err == nil` with the first 1000 rows dropped on the floor, and downstream code under-bills / under-processes without any signal. The cap is a design constraint, not a knob.
 
-**Fix**: drive the read to exhaustion through keyset pagination — an outer `for` loop wrapping `db.Query().Do(...)`, with a cursor predicate (`WHERE pk_col > $cursor ORDER BY pk_col LIMIT N`) and termination when a page returns zero rows. Read through `db.Query()` (no row cap), not `db.Table()`.
+**Fix**: drive the read to exhaustion through keyset pagination — an outer `for` loop wrapping `db.Query().Do(...)`, with a cursor predicate (`WHERE pk_col > $cursor ORDER BY pk_col LIMIT N`) and termination when a page returns zero rows. Read through `db.Query()` (Query Service streams without the row cap), not `db.Table()`. Adding `ydb.WithIgnoreTruncated` is not a fix.
 
 **Source**: `ydb-platform/ydb-go-sdk/MIGRATION_v2_v3.md` — section "About truncated result" documents the 1000-row default and the v3 non-retryable-error behavior. <https://github.com/ydb-platform/ydb-go-sdk/blob/master/MIGRATION_v2_v3.md>.
 
@@ -84,7 +84,7 @@ Audit rules for application code talking to YDB through the Go SDK. Each rule is
 
 **What to look for**: `ydb.WithBalancer(balancers.PreferLocalDC(...))` or `ydb.WithBalancer(balancers.PreferNearestDC(...))` (the rename — `PreferLocalDC` is marked `// Deprecated`, but `PreferNearestDC` has the same effect) in driver construction.
 
-**Fix**: use `balancers.RandomChoice()` (the default). Prefer-DC balancers concentrate all client traffic on nodes in one datacenter — the "local" / "nearest" one — turning the cluster's other DCs into idle hot-standbys and the chosen DC into a saturation bottleneck. Cross-DC latency savings on individual requests are dwarfed by the throughput cliff once the chosen DC's nodes are saturated. The default round-robin balancer spreads load evenly and is what YDB clusters are designed for.
+**Fix**: drop the `WithBalancer(...)` option (or use `balancers.RandomChoice()` explicitly — that is what `balancers.Default()` returns). Prefer-DC balancers concentrate all client traffic on nodes in one datacenter — the "local" / "nearest" one — turning the cluster's other DCs into idle hot-standbys and the chosen DC into a saturation bottleneck. Cross-DC latency savings on individual requests are dwarfed by the throughput cliff once the chosen DC's nodes are saturated. `RandomChoice` picks an endpoint at random per request and spreads load evenly across every available node in the cluster.
 
 **Source**: `ydb-platform/ydb-go-sdk/balancers/balancers.go` — `PreferLocalDC` is marked `// Deprecated: use PreferNearestDC instead`; both have the same balancing semantics. <https://github.com/ydb-platform/ydb-go-sdk/blob/master/balancers/balancers.go>.
 
@@ -101,10 +101,12 @@ YDB supports two transaction styles. *Interactive* — the developer writes `beg
 
 **Fix**:
 
-- *Interactive*: replace the standalone Begin + first Exec with one call — `s.Execute(ctx, firstQuery, table.WithTxControl(table.BeginTx(table.WithSerializableReadWrite()), ...))` (Table Service) or the equivalent `query.WithTxControl(...)` on `s.Query(...)` (Query Service). The first query carries the begin flag; no separate begin RPC.
-- *Non-interactive*: open the driver with `ydb.WithLazyTx(true)`. `DoTx` then defers begin to the first query inside the closure.
+- *Interactive*: replace the standalone Begin + first Exec with one call.
+  - Table Service: `s.Execute(ctx, table.TxControl(table.BeginTx(table.WithSerializableReadWrite())), firstQuery, params)` — `txControl` is the positional second argument to `s.Execute`; the first query carries the begin flag.
+  - Query Service: `s.Query(ctx, firstQuery, query.WithTxControl(tx.NewControl(tx.BeginTx(tx.WithSerializableReadWrite()))), query.WithParameters(...))`.
+- *Non-interactive*: open the driver with `ydb.WithLazyTx(true)` (or pass `query.WithLazyTx(true)` as a per-call `DoTxOption`). `DoTx` then defers begin to the first query inside the closure.
 
-**Source**: `ydb-platform/ydb-go-sdk` — `table.WithTxControl` / `BeginTx` and the `ydb.WithLazyTx` driver option. <https://github.com/ydb-platform/ydb-go-sdk>.
+**Source**: `ydb-platform/ydb-go-sdk/table/table.go` — `Session.Execute(ctx, *TransactionControl, sql, *params.Params, ...)` and `table.TxControl` / `table.BeginTx`. <https://github.com/ydb-platform/ydb-go-sdk/blob/master/examples/ttl/series.go> shows the canonical Table Service form. `ydb.WithLazyTx` driver option lives in the top-level `ydb` package.
 
 ### RULE-GO-10: Transaction commit as a separate RPC
 
@@ -118,6 +120,11 @@ Same split as RULE-GO-09. In either transaction style the commit can ride on the
 - *Non-interactive*: `db.Query().DoTx(ctx, func(...) { ...; return nil })` where the last write inside the closure does not carry `query.WithCommit()`. `DoTx` will commit on return-nil, but as its own RPC.
 - *Doubly wrong*: an explicit `tx.CommitTx(ctx)` call **inside** a `DoTx` closure. `DoTx` already commits on return-nil per `query/client.go:DoTx` godoc; the explicit call is both redundant and a separate RPC.
 
-**Fix**: pass `query.WithCommit()` as an option to the last `tx.Exec(...)` / `tx.Query(...)` of the closure (or `table.WithTxControl(..., table.CommitTx())` on the last Table Service execute). The commit piggybacks on the last write's RPC. For the doubly-wrong case, also delete the explicit `tx.CommitTx(ctx)` call — `DoTx` handles commit on return-nil.
+**Fix**: fuse the commit into the last query's RPC.
+
+- Query Service: pass `query.WithCommit()` as an `ExecuteOption` to the last `tx.Exec(...)` / `tx.Query(...)` of the closure.
+- Table Service: pass a `*table.TransactionControl` with `table.CommitTx()` on the positional second argument of the last `s.Execute(...)` — e.g. `s.Execute(ctx, table.TxControl(table.BeginTx(...), table.CommitTx()), lastQuery, params)`.
+
+For the doubly-wrong case, also delete the explicit `tx.CommitTx(ctx)` call inside the closure — `DoTx` handles commit on return-nil.
 
 **Source**: `ydb-platform/ydb-go-sdk/query/execute_options.go` — `WithCommit() ExecuteOption`. `query/client.go` `DoTx` godoc: *"If op TxOperation returns nil - transaction will be committed"*. <https://github.com/ydb-platform/ydb-go-sdk/blob/master/query/client.go>.

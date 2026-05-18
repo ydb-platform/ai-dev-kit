@@ -46,9 +46,12 @@ assert:
       - Recommend one of two precise fixes — both valid in this code
         path:
         (a) Stay on Table Service interactive: replace the explicit
-        `BeginTransaction` with the first `s.Execute(...)` carrying
-        `table.WithTxControl(table.BeginTx(table.WithSerializableReadWrite()), ...)`
-        so begin rides on the first query's RPC, OR
+        `BeginTransaction` with a first `s.Execute(ctx, txControl, sql,
+        params)` whose positional `txControl` is built with
+        `table.TxControl(table.BeginTx(table.WithSerializableReadWrite()))`
+        so begin rides on the first query's RPC. (Note: Table Service
+        `s.Execute` takes `txControl` as its positional second argument
+        — there is no `table.WithTxControl(...)` ExecuteOption.) OR
         (b) Migrate to non-interactive: rewrite using
         `db.Query().DoTx(ctx, func(ctx, tx query.TxActor) error { ... })`
         with the driver opened using `ydb.WithLazyTx(true)` so the

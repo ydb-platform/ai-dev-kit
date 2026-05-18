@@ -35,14 +35,19 @@ assert:
     value: |
       The response should:
       - Cite `RULE-GO-01` by ID (Table Service read without pagination).
-      - State that Table Service caps query results at 1000 rows by default
-        (server-side, silent — the call returns without an exception while
-        the underlying query matched more rows).
-      - Explain the consequence specifically in the billing context: while
-        the count of unbilled items stays under 1000 the function works,
-        but once it crosses 1000 the function silently under-charges and
-        the discrepancy compounds. The bug is data-dependent and not
-        catchable by tests on a small dev dataset.
+      - State that Table Service caps query results at 1000 rows by default,
+        and characterise the v3 behaviour correctly: `s.Execute` surfaces a
+        non-retryable error on truncation (and `s.StreamExecuteScanQuery`
+        surfaces it as retryable). It is acceptable to also note that
+        passing `ydb.WithIgnoreTruncated` to the driver restores v2-style
+        silent truncation where the call returns `err == nil` with the
+        excess rows dropped.
+      - Explain the consequence specifically in the billing context: the
+        function works in dev with a small data set, but in production once
+        the match exceeds 1000 it either errors out and stops billing or —
+        if `WithIgnoreTruncated` is set — silently under-charges. The bug
+        is data-dependent and not catchable by tests on a small dev
+        dataset.
       - Recommend redesigning the read to exhaust the result set —
         keyset pagination (`WHERE user_id > $lastID ORDER BY user_id LIMIT N`
         wrapped in an outer loop that terminates when a page comes back
@@ -54,8 +59,8 @@ assert:
       Full fail if the response:
       - Only suggests adding an explicit `LIMIT` clause without an outer
         pagination loop.
-      - Recommends raising / configuring away the 1000-row cap.
-      - Treats the issue as performance / memory rather than as a silent
+      - Recommends `ydb.WithIgnoreTruncated` or "raising the cap" as a fix.
+      - Treats the issue as performance / memory rather than as a
         correctness bug.
       - Defends the code as correct on the grounds that "Table Service
         works fine for SELECT queries".

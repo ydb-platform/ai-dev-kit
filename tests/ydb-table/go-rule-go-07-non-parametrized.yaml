@@ -38,11 +38,14 @@ assert:
         text and a new plan compilation.
       - Recommend binding the values via
         `ydb.ParamsBuilder().Param("$namePrefix").Text(namePrefix).
-        Param("$minAge").Int32(minAge).Build()` passed to
-        `query.WithParameters(...)`. A leading `DECLARE` block is
-        optional in modern YDB (types are inferred from the bound
-        values) and is fine to mention as an explicit-contract addition
-        but not required.
+        Param("$minAge").Int32(int32(minAge)).Build()` (or an
+        equivalent matching-type call — `minAge` in the prompt is a
+        Go `int` and the typed parameter builder is type-strict, so a
+        cast or a parameter-type choice that accepts `int` is required)
+        passed to `query.WithParameters(...)`. A leading `DECLARE`
+        block is optional in modern YDB (types are inferred from the
+        bound values) and is fine to mention as an explicit-contract
+        addition but not required.
 
       Full fail if the response only mentions SQL injection without
       naming the plan-cache consequence, or only mentions plan caching

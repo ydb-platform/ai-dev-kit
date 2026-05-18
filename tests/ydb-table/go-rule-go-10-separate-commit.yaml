@@ -24,7 +24,7 @@ vars:
         )
         if err != nil { return err }
         return tx.CommitTx(ctx)
-    }, query.WithIdempotent())
+    })
     ```
 
 assert:
