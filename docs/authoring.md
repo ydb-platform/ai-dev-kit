@@ -68,9 +68,11 @@ Workflow inside `SKILL.md` loads **one** tree or the other based on task type (a
 **Severity**: Critical | High | Medium | Low
 **What to look for**: <grep-friendly signals>
 **Problem**: <1–3 lines>
-**Fix**:
-<short corrected snippet>
+**Fix**: <1–2 sentences naming the corrective API call(s), OR a short corrected snippet>
+**Source**: <upstream file URL(s) backing the claim>
 ```
+
+`Fix` may be prose-only when the prose itself names every corrective API the auditor needs (e.g. `query.WithIdempotent()`, `table.TxControl(table.BeginTx(...))`). Reach for a snippet when the fix turns on a non-obvious composition of calls or a config-file shape that prose can't capture (the Java rules' Hibernate `application.properties` block, JPA annotations, Spring meta-annotations). The Go rules ship prose-only after laptop A/B confirmed that adding code blocks did not improve audit quality on smaller models — verify the same on any new surface before going prose-only.
 
 Rules must be self-contained — a surface skill installed without `ydb-core` must still produce correct audit output for its own rules. Do not cross-reference `ydb-core` from `rules/`.
 
@@ -95,6 +97,7 @@ Rule IDs have the shape `RULE-<PREFIX>-<NN>`. Prefixes are **not pre-allocated**
 | Prefix | Scope | First used in |
 |--------|-------|---------------|
 | JV | Java SDK / JDBC / Hibernate / Spring Data anti-patterns | skills/ydb-table/rules/embed/java.md |
+| GO | Go SDK (`ydb-go-sdk/v3`) — driver, sessions, query/table services, retry, transactions | skills/ydb-table/rules/embed/go.md |
 
 ### Severity labels
 

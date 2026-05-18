@@ -125,7 +125,8 @@ providers:
         model: "openai/gpt-oss-20b"
         messages: *messages
         temperature: 0.2
-        max_tokens: 2048
+        # Reasoning model — same headroom as in promptfooconfig.yaml.
+        max_tokens: 8192
   - id: https:mistralai/devstral-small
     label: Laptop · Mistral Devstral Small
     config:

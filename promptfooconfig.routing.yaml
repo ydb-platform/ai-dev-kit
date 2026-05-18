@@ -126,7 +126,10 @@ providers:
         model: "openai/gpt-oss-20b"
         messages: *messages
         temperature: 0.0
-        max_tokens: 256
+        # Reasoning model — same fix as Qwen3.6 35B-A3B below and the
+        # main matrix: 256 gets eaten by the thinking budget and the
+        # visible slug comes back empty. 8192 leaves headroom.
+        max_tokens: 8192
   - id: https:mistralai/devstral-small
     label: Laptop · Mistral Devstral Small
     config:
