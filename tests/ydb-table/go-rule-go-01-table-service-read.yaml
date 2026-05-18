@@ -7,8 +7,10 @@ vars:
     Tell me if anything is wrong.
 
     ```go
-    func chargeUnbilled(ctx context.Context, db *ydb.Driver) error {
-        return db.Table().Do(ctx, func(ctx context.Context, s table.Session) error {
+    func loadUnbilled(ctx context.Context, db *ydb.Driver) ([]UsageItem, error) {
+        var items []UsageItem
+        err := db.Table().Do(ctx, func(ctx context.Context, s table.Session) error {
+            local := make([]UsageItem, 0, 1000)
             _, res, err := s.Execute(ctx, table.DefaultTxControl(),
                 `SELECT user_id, amount FROM usage_items WHERE billed = false`, nil)
             if err != nil {
@@ -17,17 +19,25 @@ vars:
             defer res.Close()
             for res.NextResultSet(ctx) {
                 for res.NextRow() {
-                    var userID uint64
-                    var amount float64
-                    if err := res.ScanWithDefaults(&userID, &amount); err != nil {
+                    var item UsageItem
+                    if err := res.ScanWithDefaults(&item.UserID, &item.Amount); err != nil {
                         return err
                     }
-                    chargeCustomer(ctx, userID, amount)
+                    local = append(local, item)
                 }
             }
-            return res.Err()
+            if err := res.Err(); err != nil {
+                return err
+            }
+            items = local
+            return nil
         }, table.WithIdempotent())
+        return items, err
     }
+
+    // caller later does:
+    //   items, err := loadUnbilled(ctx, db)
+    //   for _, it := range items { chargeCustomer(ctx, it.UserID, it.Amount) }
     ```
 
 assert:

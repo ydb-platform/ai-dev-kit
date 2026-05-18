@@ -18,7 +18,7 @@ Audit rules for application code talking to YDB through the Go SDK. Each rule is
 
 **Severity**: High
 
-**What to look for**: assignments to variables declared outside the `db.Query().Do(...)` / `db.Table().Do(...)` / `DoTx(...)` lambda — `append(outerSlice, ...)`, `outerMap[k] = v`, `outerResult, err = s.Execute(...)`. Anything where state crosses the closure boundary.
+**What to look for**: mutations of state outside the `db.Query().Do(...)` / `db.Table().Do(...)` / `DoTx(...)` lambda *while the closure is still running* — `append(outerSlice, row)` mid-iteration, `outerMap[k] = v` after each row, `outerResult, err = s.Execute(...)` capturing a per-attempt handle, an external side effect like a charge / RPC / log emission called from inside the closure body. The single allowed pattern is the final `outerVar = local` assignment on the success path, immediately before the closure returns `nil` — that one is what the Fix prescribes and must not be flagged.
 
 **Problem**: the `Do`/`DoTx` closure is the unit of work — SDK invokes it again on every retryable error (transaction conflict, network transient, session loss). All data processing must happen *inside* the closure. Mutations to external state survive across attempts and produce wrong values: `append` to an outer slice duplicates on retry, an outer `Result` reference may end up holding a stream from a failed attempt, an outer map accumulates entries from partial reads. The closure crosses only one thing back: the success/failure decision. A value the caller needs is built atomically inside on the successful attempt and assigned to the outer variable only at the end, after the closure body has reached that line cleanly.
 
