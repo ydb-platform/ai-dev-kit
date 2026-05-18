@@ -24,13 +24,13 @@ Audit rules for application code talking to YDB through the Go SDK. Each rule is
 
 **Fix**: build the result inside the closure as a per-attempt local; assign to the outer variable only on the path that returns `nil`. The closure owns all data processing; only the success decision crosses the boundary.
 
-**Source**: `ydb-platform/ydb-go-sdk` — `Do`/`DoTx` retry contract. <https://github.com/ydb-platform/ydb-go-sdk>.
+**Source**: `ydb-platform/ydb-go-sdk` — `Do`/`DoTx` retry contract in <https://github.com/ydb-platform/ydb-go-sdk/blob/master/query/client.go> (godocs on `Do` / `DoTx`) and the retry loop in <https://github.com/ydb-platform/ydb-go-sdk/blob/master/retry/retry.go>.
 
 ### RULE-GO-03: Missing `WithIdempotent` on `Do`/`DoTx`
 
 **Severity**: High
 
-**What to look for**: `db.Query().Do(ctx, ...)` / `db.Table().Do(ctx, ...)` / `DoTx(ctx, ...)` calls without `query.WithIdempotent()` or `table.WithIdempotent()` in the options list.
+**What to look for**: `db.Query().Do(ctx, ...)` / `db.Table().Do(ctx, ...)` / `DoTx(ctx, ...)` calls whose closure body is safe to replay (a read; an `UPSERT` keyed on a value the caller already has — externally-generated id, idempotency key; a write guarded by such a key) but no `query.WithIdempotent()` / `table.WithIdempotent()` in the options list. Do *not* flag calls where the closure body is non-idempotent (counter increment, money transfer, raw `INSERT` of a generated row) — there `WithIdempotent` must remain absent and the fix is to make the work idempotent first.
 
 **Problem**: the SDK classifies failures into three buckets (`retry/mode.go:MustRetry`): non-retryable (never retried), unconditionally-retryable (always retried), and **conditionally-retryable** (retried only when the developer has declared the work idempotent). The third bucket holds transport-class failures — connection drop, gRPC reset, session loss after the request was sent — where the server may have already committed the write before the failure reached the client. Replay is safe for an idempotent write (`UPSERT` keyed on an externally-generated id, idempotency-key-guarded insert) and unsafe for a non-idempotent one (counter increment, decrement, transfer, raw `INSERT` of a generated row). The SDK cannot tell which from the API surface — only the developer knows. `WithIdempotent()` is the contract: *"I declare this closure safe to replay on conditional failures."* Setting it on a non-idempotent write causes double effect; omitting it on an idempotent write makes the program propagate transport errors it could have absorbed.
 
@@ -52,11 +52,11 @@ Audit rules for application code talking to YDB through the Go SDK. Each rule is
 
 **Severity**: High
 
-**What to look for**: `for` loop with explicit `time.Sleep(...)` between attempts, calling `s.Execute(...)` / `s.Query(...)` / `db.Query().Do(...)` inside.
+**What to look for**: `for` loop with explicit `time.Sleep(...)` between attempts, calling any YDB-facing method inside — session methods (`s.Execute`, `s.Query`, `s.BeginTransaction`), client-level methods (`db.Table().CreateSession`, `db.Table().Do`, `db.Query().Do`, `db.Query().DoTx`), or arbitrary user functions that themselves call into the SDK.
 
 **Fix**: delete the custom loop and use the SDK retrier (`db.Query().Do`, `db.Table().Do`, `retry.Retry` from `retry/`). A hand-rolled retrier doesn't see YDB's error classification — it replays every non-nil error indiscriminately: non-retryable failures (`PRECONDITION_FAILED`, schema mismatch) burn the retry budget, and conditionally-retryable failures (transport drops where the server may have committed) get retried with no idempotency gate, which can double-apply a non-idempotent write. The SDK retrier classifies via `retry/mode.go` `MustRetry(isOperationIdempotent bool)` and only retries the conditional bucket when `WithIdempotent` is set. Backoff with jitter and session-pool integration also come from the SDK retrier, not from caller-side `for`/`Sleep` code.
 
-**Source**: `ydb-platform/ydb-go-sdk/retry/retry.go` and `retry/backoff.go`. <https://github.com/ydb-platform/ydb-go-sdk/blob/master/retry/retry.go>.
+**Source**: `ydb-platform/ydb-go-sdk` — retry classification in <https://github.com/ydb-platform/ydb-go-sdk/blob/master/retry/mode.go>; retry loop and backoff in <https://github.com/ydb-platform/ydb-go-sdk/blob/master/retry/retry.go> and <https://github.com/ydb-platform/ydb-go-sdk/blob/master/retry/backoff.go>.
 
 ### RULE-GO-06: Nested `Do` / `DoTx` call
 
@@ -76,7 +76,7 @@ Audit rules for application code talking to YDB through the Go SDK. Each rule is
 
 **Fix**: bind values through `ydb.ParamsBuilder().Param("$name").<Type>(value).Build()` and pass them via `query.WithParameters(...)` (or `table.NewQueryParameters(...)` for Table Service). Two failure modes the SDK's parameter API closes: SQL injection (caller values become YQL syntax when concatenated), and per-call query-plan miss (every distinct rendered text is a new plan in the server-side cache). A `DECLARE` block in the query body is optional — types are inferred from the bound values — and is justified when the parameter shape is compound (`List<Struct<...>>`) or when an explicit caller contract is desirable.
 
-**Source**: `ydb-platform/ydb-go-sdk` — `ParamsBuilder` and `query.WithParameters`. <https://github.com/ydb-platform/ydb-go-sdk>. YQL parameters reference: <https://ydb.tech/docs/en/yql/reference/syntax/declare>.
+**Source**: `ydb-platform/ydb-go-sdk` — `ParamsBuilder` in <https://github.com/ydb-platform/ydb-go-sdk/blob/master/params_builder.go>; `query.WithParameters` in <https://github.com/ydb-platform/ydb-go-sdk/blob/master/query/execute_options.go>. YQL parameters reference: <https://ydb.tech/docs/en/yql/reference/syntax/declare>.
 
 ### RULE-GO-08: `PreferLocalDC` / `PreferNearestDC` balancer in production
 
@@ -96,7 +96,7 @@ YDB supports two transaction styles. *Interactive* — the developer writes `beg
 
 **What to look for**:
 
-- *Interactive*: `s.BeginTransaction(ctx, ...)` or `s.Begin(ctx, ...)` returning a `tx` handle, followed by `tx.Exec(...)` / `tx.Query(...)`.
+- *Interactive*: `s.BeginTransaction(ctx, ...)` or `s.Begin(ctx, ...)` returning a `tx` handle, followed by `tx.Exec(...)` / `tx.Query(...)` (Query Service) or `tx.Execute(...)` (Table Service).
 - *Non-interactive*: `db.Query().DoTx(...)` (or `db.Table().DoTx(...)`) on a driver opened without `ydb.WithLazyTx(true)`.
 
 **Fix**:
@@ -106,7 +106,7 @@ YDB supports two transaction styles. *Interactive* — the developer writes `beg
   - Query Service: `s.Query(ctx, firstQuery, query.WithTxControl(tx.NewControl(tx.BeginTx(tx.WithSerializableReadWrite()))), query.WithParameters(...))`.
 - *Non-interactive*: open the driver with `ydb.WithLazyTx(true)` (or pass `query.WithLazyTx(true)` as a per-call `DoTxOption`). `DoTx` then defers begin to the first query inside the closure.
 
-**Source**: `ydb-platform/ydb-go-sdk/table/table.go` — `Session.Execute(ctx, *TransactionControl, sql, *params.Params, ...)` returns `(Transaction, Result, error)`. Canonical multi-statement form is in `table/example_test.go` `Example_lazyTransaction`. `ydb.WithLazyTx` driver option lives in the top-level `ydb` package.
+**Source**: `Session.Execute(ctx, *TransactionControl, sql, *params.Params, ...)` returns `(Transaction, Result, error)` — <https://github.com/ydb-platform/ydb-go-sdk/blob/master/table/table.go>. Canonical multi-statement form: <https://github.com/ydb-platform/ydb-go-sdk/blob/master/table/example_test.go> (`Example_lazyTransaction`). `ydb.WithLazyTx` driver option: <https://github.com/ydb-platform/ydb-go-sdk/blob/master/options.go>; per-call `query.WithLazyTx`: <https://github.com/ydb-platform/ydb-go-sdk/blob/master/query/client.go>.
 
 ### RULE-GO-10: Transaction commit as a separate RPC
 
@@ -116,7 +116,7 @@ Same split as RULE-GO-09. In either transaction style the commit can ride on the
 
 **What to look for**:
 
-- *Interactive*: `tx.Commit(ctx)` / `tx.CommitTx(ctx)` called as a separate statement after the last `tx.Exec(...)` / `tx.Query(...)`.
+- *Interactive*: `tx.Commit(ctx)` / `tx.CommitTx(ctx)` called as a separate statement after the last `tx.Exec(...)` / `tx.Query(...)` (Query Service) or `tx.Execute(...)` (Table Service).
 - *Non-interactive*: `db.Query().DoTx(ctx, func(...) { ...; return nil })` where the last write inside the closure does not carry `query.WithCommit()`. `DoTx` will commit on return-nil, but as its own RPC.
 - *Doubly wrong*: an explicit `tx.CommitTx(ctx)` call **inside** a `DoTx` closure. `DoTx` already commits on return-nil per `query/client.go:DoTx` godoc; the explicit call is both redundant and a separate RPC.
 
@@ -127,4 +127,4 @@ Same split as RULE-GO-09. In either transaction style the commit can ride on the
 
 For the doubly-wrong case (explicit `tx.CommitTx` inside a `DoTx` closure), also delete the call — `DoTx` handles commit on return-nil.
 
-**Source**: `ydb-platform/ydb-go-sdk/query/execute_options.go` — `WithCommit() ExecuteOption`. `query/client.go` `DoTx` godoc: *"If op TxOperation returns nil - transaction will be committed"*. Table Service equivalent `options.WithCommit() ExecuteDataQueryOption` in `table/options/options.go`; canonical multi-statement usage in `table/example_test.go` `Example_lazyTransaction` and `tests/integration/table_tx_lazy_test.go`.
+**Source**: `query.WithCommit() ExecuteOption` — <https://github.com/ydb-platform/ydb-go-sdk/blob/master/query/execute_options.go>; `DoTx` godoc *"If op TxOperation returns nil - transaction will be committed"* — <https://github.com/ydb-platform/ydb-go-sdk/blob/master/query/client.go>. Table Service `options.WithCommit() ExecuteDataQueryOption` — <https://github.com/ydb-platform/ydb-go-sdk/blob/master/table/options/options.go>; canonical multi-statement usage in <https://github.com/ydb-platform/ydb-go-sdk/blob/master/table/example_test.go> (`Example_lazyTransaction`) and <https://github.com/ydb-platform/ydb-go-sdk/blob/master/tests/integration/table_tx_lazy_test.go>.

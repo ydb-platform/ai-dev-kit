@@ -7,7 +7,7 @@ The only YDB Go SDK is **`github.com/ydb-platform/ydb-go-sdk/v3`**. The same pac
 - a **native** API with the modern Query Service (`db.Query().Do/DoTx(...)`) and the legacy Table Service (`db.Table().Do/DoTx(...)`),
 - a **`database/sql`** driver registered as `"ydb"` (blank-import `_ "github.com/ydb-platform/ydb-go-sdk/v3"`) for code that needs the stdlib interface.
 
-Default new code to the native Query Service. The Table Service is in legacy mode and has a 1000-row default result cap that the audit rules flag on read paths (surfaced as an error on `s.Execute` in v3 by default, restored to v2-style silent truncation if `ydb.WithIgnoreTruncated` is set — see RULE-GO-01). Connection-string format and authentication environment variables: see [`../../../ydb-core/SKILL.md#connecting`](../../../ydb-core/SKILL.md#connecting). Worked examples for both surfaces: <https://github.com/ydb-platform/ydb-go-sdk/tree/master/examples>. `database/sql` specifics: <https://github.com/ydb-platform/ydb-go-sdk/blob/master/SQL.md>.
+Default new code to the native Query Service. The Table Service is in legacy mode and has a 1000-row default result cap (surfaced as an error on `s.Execute` in v3 by default, restored to v2-style silent truncation if `ydb.WithIgnoreTruncated` is set on the driver — see <https://github.com/ydb-platform/ydb-go-sdk/blob/master/MIGRATION_v2_v3.md>). Connection-string format and authentication environment variables: see [`../../../ydb-core/SKILL.md#connecting`](../../../ydb-core/SKILL.md#connecting). Worked examples for both surfaces: <https://github.com/ydb-platform/ydb-go-sdk/tree/master/examples>. `database/sql` specifics: <https://github.com/ydb-platform/ydb-go-sdk/blob/master/SQL.md>.
 
 ## Query execution
 
