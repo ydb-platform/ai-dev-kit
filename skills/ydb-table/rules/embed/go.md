@@ -8,7 +8,7 @@ Audit rules for application code talking to YDB through the Go SDK. Each rule is
 
 **What to look for**: `s.Execute(ctx, ..., "SELECT ...")` or `s.StreamExecuteScanQuery(...)` inside `db.Table().Do(...)`, with no outer keyset-pagination loop. Also any `ydb.WithIgnoreTruncated` on the driver — that option silences the v3 error and restores v2-style silent truncation, which is what the rule exists to prevent.
 
-**Problem**: Table Service caps query results at 1000 rows by default. In v3 the cap surfaces — `s.Execute` returns a non-retryable error and `s.StreamExecuteScanQuery` returns a retryable one (so it loops until the retry budget exhausts). Either way the code does not get the full result set. The architectural problem is that code written assuming "one `Execute` returns everything matching" is wrong by construction: it works in dev with small data, errors out in production once the match crosses the cap, and the common reflex — pass `ydb.WithIgnoreTruncated` to "fix" the error — restores v2-style silent truncation where the call returns `err == nil` with the first 1000 rows dropped on the floor, and downstream code under-bills / under-processes without any signal. The cap is a design constraint, not a knob.
+**Problem**: Table Service caps query results at 1000 rows by default. In v3 the cap surfaces — `s.Execute` returns a non-retryable error and `s.StreamExecuteScanQuery` returns a retryable one (so it loops until the retry budget exhausts). Either way the code does not get the full result set. The architectural problem is that code written assuming "one `Execute` returns everything matching" is wrong by construction: it works in dev with small data, errors out in production once the match crosses the cap, and the common reflex — pass `ydb.WithIgnoreTruncated` to "fix" the error — restores v2-style silent truncation where the call returns `err == nil` with the first 1000 rows of the match and everything beyond the cap dropped on the floor, and downstream code under-bills / under-processes without any signal. The cap is a design constraint, not a knob.
 
 **Fix**: drive the read to exhaustion through keyset pagination — an outer `for` loop wrapping `db.Query().Do(...)`, with a cursor predicate (`WHERE pk_col > $cursor ORDER BY pk_col LIMIT N`) and termination when a page returns zero rows. Read through `db.Query()` (Query Service streams without the row cap), not `db.Table()`. Adding `ydb.WithIgnoreTruncated` is not a fix.
 
@@ -101,12 +101,12 @@ YDB supports two transaction styles. *Interactive* — the developer writes `beg
 
 **Fix**:
 
-- *Interactive*: replace the standalone Begin + first Exec with one call.
-  - Table Service: `s.Execute(ctx, table.TxControl(table.BeginTx(table.WithSerializableReadWrite())), firstQuery, params)` — `txControl` is the positional second argument to `s.Execute`; the first query carries the begin flag.
+- *Interactive*: drop the standalone `s.BeginTransaction(...)` and let the begin ride on the first query.
+  - Table Service: the first call is `tx, result, err := s.Execute(ctx, table.TxControl(table.BeginTx(table.WithSerializableReadWrite())), firstQuery, params)` — `txControl` is the positional second argument; the returned `tx` is then used for subsequent `tx.Execute(...)` calls within the transaction (single-shot autocommit also exists: add `table.CommitTx()` to the same `TxControl` if the transaction has just one statement).
   - Query Service: `s.Query(ctx, firstQuery, query.WithTxControl(tx.NewControl(tx.BeginTx(tx.WithSerializableReadWrite()))), query.WithParameters(...))`.
 - *Non-interactive*: open the driver with `ydb.WithLazyTx(true)` (or pass `query.WithLazyTx(true)` as a per-call `DoTxOption`). `DoTx` then defers begin to the first query inside the closure.
 
-**Source**: `ydb-platform/ydb-go-sdk/table/table.go` — `Session.Execute(ctx, *TransactionControl, sql, *params.Params, ...)` and `table.TxControl` / `table.BeginTx`. <https://github.com/ydb-platform/ydb-go-sdk/blob/master/examples/ttl/series.go> shows the canonical Table Service form. `ydb.WithLazyTx` driver option lives in the top-level `ydb` package.
+**Source**: `ydb-platform/ydb-go-sdk/table/table.go` — `Session.Execute(ctx, *TransactionControl, sql, *params.Params, ...)` returns `(Transaction, Result, error)`. Canonical multi-statement form is in `table/example_test.go` `Example_lazyTransaction`. `ydb.WithLazyTx` driver option lives in the top-level `ydb` package.
 
 ### RULE-GO-10: Transaction commit as a separate RPC
 
@@ -123,8 +123,8 @@ Same split as RULE-GO-09. In either transaction style the commit can ride on the
 **Fix**: fuse the commit into the last query's RPC.
 
 - Query Service: pass `query.WithCommit()` as an `ExecuteOption` to the last `tx.Exec(...)` / `tx.Query(...)` of the closure.
-- Table Service: pass a `*table.TransactionControl` with `table.CommitTx()` on the positional second argument of the last `s.Execute(...)` — e.g. `s.Execute(ctx, table.TxControl(table.BeginTx(...), table.CommitTx()), lastQuery, params)`.
+- Table Service (multi-statement interactive transaction): pass `options.WithCommit()` (from `github.com/ydb-platform/ydb-go-sdk/v3/table/options`) as an `ExecuteDataQueryOption` to the last `tx.Execute(ctx, sql, params, options.WithCommit())` — the commit flag rides on that RPC and the transaction terminates without a separate `tx.CommitTx`. For a single-statement Table Service transaction, fold both begin and commit into one `s.Execute(ctx, table.TxControl(table.BeginTx(...), table.CommitTx()), sql, params)`.
 
-For the doubly-wrong case, also delete the explicit `tx.CommitTx(ctx)` call inside the closure — `DoTx` handles commit on return-nil.
+For the doubly-wrong case (explicit `tx.CommitTx` inside a `DoTx` closure), also delete the call — `DoTx` handles commit on return-nil.
 
-**Source**: `ydb-platform/ydb-go-sdk/query/execute_options.go` — `WithCommit() ExecuteOption`. `query/client.go` `DoTx` godoc: *"If op TxOperation returns nil - transaction will be committed"*. <https://github.com/ydb-platform/ydb-go-sdk/blob/master/query/client.go>.
+**Source**: `ydb-platform/ydb-go-sdk/query/execute_options.go` — `WithCommit() ExecuteOption`. `query/client.go` `DoTx` godoc: *"If op TxOperation returns nil - transaction will be committed"*. Table Service equivalent `options.WithCommit() ExecuteDataQueryOption` in `table/options/options.go`; canonical multi-statement usage in `table/example_test.go` `Example_lazyTransaction` and `tests/integration/table_tx_lazy_test.go`.

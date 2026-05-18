@@ -63,6 +63,8 @@ assert:
       - Defends the explicit `BeginTransaction` as needed.
       - Only flags the separate `CommitTx` issue (that's RULE-GO-10)
         without addressing the explicit Begin.
-      - Recommends only "use DoTx" without noting that DoTx's begin
-        ride on the first query requires the `ydb.WithLazyTx(true)`
-        option on the driver.
+      - Recommends `DoTx` as the *sole* fix while omitting
+        `ydb.WithLazyTx(true)` (a partial response that gets fix (a)
+        right and only mentions `DoTx` in passing without LazyTx is
+        not a full fail — the rubric only triggers when LazyTx is
+        missing from the response's primary recommendation).

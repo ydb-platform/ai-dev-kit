@@ -7,7 +7,7 @@ The only YDB Go SDK is **`github.com/ydb-platform/ydb-go-sdk/v3`**. The same pac
 - a **native** API with the modern Query Service (`db.Query().Do/DoTx(...)`) and the legacy Table Service (`db.Table().Do/DoTx(...)`),
 - a **`database/sql`** driver registered as `"ydb"` (blank-import `_ "github.com/ydb-platform/ydb-go-sdk/v3"`) for code that needs the stdlib interface.
 
-Default new code to the native Query Service. The Table Service is in legacy mode and has a 1000-row silent result cap that the audit rules flag on read paths. Connection-string format and authentication environment variables: see [`../../../ydb-core/SKILL.md#connecting`](../../../ydb-core/SKILL.md#connecting). Worked examples for both surfaces: <https://github.com/ydb-platform/ydb-go-sdk/tree/master/examples>. `database/sql` specifics: <https://github.com/ydb-platform/ydb-go-sdk/blob/master/SQL.md>.
+Default new code to the native Query Service. The Table Service is in legacy mode and has a 1000-row default result cap that the audit rules flag on read paths (surfaced as an error on `s.Execute` in v3 by default, restored to v2-style silent truncation if `ydb.WithIgnoreTruncated` is set — see RULE-GO-01). Connection-string format and authentication environment variables: see [`../../../ydb-core/SKILL.md#connecting`](../../../ydb-core/SKILL.md#connecting). Worked examples for both surfaces: <https://github.com/ydb-platform/ydb-go-sdk/tree/master/examples>. `database/sql` specifics: <https://github.com/ydb-platform/ydb-go-sdk/blob/master/SQL.md>.
 
 ## Query execution
 
@@ -44,7 +44,10 @@ Source: <https://github.com/ydb-platform/ydb-go-sdk> README "Example Usage".
 YDB has two transaction styles, and `ydb-go-sdk/v3` supports both:
 
 - **Non-interactive** (default for new code) — the SDK manages the transaction inside `db.Query().DoTx(ctx, func(ctx, tx query.TxActor) error { ... })`. Per the upstream `query/client.go` godoc: *"If op TxOperation returns nil — transaction will be committed"*. Open the driver with `ydb.WithLazyTx(true)` so the begin is deferred onto the first query, and pass `query.WithCommit()` to the last write so the commit rides on its RPC — zero standalone begin/commit round-trips.
-- **Interactive** — the developer writes `s.BeginTransaction(...)` and `tx.CommitTx(...)`. Same fusing, achieved by passing a `*table.TransactionControl` as the positional second argument of `s.Execute(...)` instead of running a standalone Begin first: `s.Execute(ctx, table.TxControl(table.BeginTx(table.WithSerializableReadWrite()), table.CommitTx()), query, params)` — a single RPC carries begin + write + commit. On the Query Service, the equivalent is `s.Query(ctx, sql, query.WithTxControl(...), query.WithCommit())` (txControl and commit are `ExecuteOption`s). Canonical Table Service form: <https://github.com/ydb-platform/ydb-go-sdk/blob/master/examples/ttl/series.go>.
+- **Interactive** — the developer writes the begin and commit explicitly. Same fusing, two shapes depending on statement count:
+  - *Multi-statement*: first call is `tx, result, err := s.Execute(ctx, table.TxControl(table.BeginTx(table.WithSerializableReadWrite())), firstQuery, params)` — `txControl` is `s.Execute`'s positional second argument and the begin rides on this RPC. Subsequent calls use the returned `tx` handle. The last call uses `tx.Execute(ctx, lastQuery, params, options.WithCommit())` (where `options` is `github.com/ydb-platform/ydb-go-sdk/v3/table/options`) — the commit rides on the final write's RPC. Canonical form: `table/example_test.go` `Example_lazyTransaction` in upstream.
+  - *Single-statement*: combine begin and commit on the only `s.Execute`: `s.Execute(ctx, table.TxControl(table.BeginTx(table.WithSerializableReadWrite()), table.CommitTx()), sql, params)` — one RPC carries begin + write + commit. Canonical form: `examples/ttl/series.go`.
+  - *Query Service* equivalent: `s.Query(ctx, sql, query.WithTxControl(...), query.WithCommit())` — txControl and commit are `ExecuteOption`s on `s.Query(...)`.
 
 Worked non-interactive example: <https://github.com/ydb-platform/ydb-go-sdk/blob/master/examples/transaction/query/main.go>.
 
