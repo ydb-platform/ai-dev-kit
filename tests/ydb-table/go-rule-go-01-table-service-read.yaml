@@ -45,13 +45,14 @@ assert:
     value: |
       The response should:
       - Cite `RULE-GO-01` by ID (Table Service read without pagination).
-      - State that Table Service caps query results at 1000 rows by default,
-        and characterise the v3 behaviour correctly: `s.Execute` surfaces a
-        non-retryable error on truncation (and `s.StreamExecuteScanQuery`
-        surfaces it as retryable). It is acceptable to also note that
-        passing `ydb.WithIgnoreTruncated` to the driver restores v2-style
-        silent truncation where the call returns `err == nil` with the
-        excess rows dropped.
+      - State that Table Service `s.Execute` caps query results at 1000
+        rows by default, and characterise the v3 behaviour correctly: a
+        truncated result surfaces as a non-retryable error. It is
+        acceptable to also note that passing `ydb.WithIgnoreTruncated` to
+        the driver restores v2-style silent truncation where the call
+        returns `err == nil` with the excess rows dropped. (Scan queries
+        via `s.StreamExecuteScanQuery` are the streaming path for large
+        result sets and are not the target of this rule.)
       - Explain the consequence specifically in the billing context: the
         function works in dev with a small data set, but in production once
         the match exceeds 1000 it either errors out and stops billing or —
