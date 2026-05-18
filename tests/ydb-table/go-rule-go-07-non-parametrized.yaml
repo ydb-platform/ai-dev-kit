@@ -36,12 +36,15 @@ assert:
         plan-cache miss — the server keeps a plan keyed by the query
         text; with values inlined, every distinct call produces a new
         text and a new plan compilation.
-      - Recommend declaring the parameters at the top of the YQL
-        body (`DECLARE $namePrefix AS Utf8; DECLARE $minAge AS Int32;`)
-        and binding them via `ydb.ParamsBuilder().Param("$namePrefix").
-        Text(namePrefix).Param("$minAge").Int32(minAge).Build()` passed
-        to `query.WithParameters(...)`.
+      - Recommend binding the values via
+        `ydb.ParamsBuilder().Param("$namePrefix").Text(namePrefix).
+        Param("$minAge").Int32(minAge).Build()` passed to
+        `query.WithParameters(...)`. A leading `DECLARE` block is
+        optional in modern YDB (types are inferred from the bound
+        values) and is fine to mention as an explicit-contract addition
+        but not required.
 
       Full fail if the response only mentions SQL injection without
       naming the plan-cache consequence, or only mentions plan caching
-      without naming SQL injection.
+      without naming SQL injection, or if it requires a `DECLARE` block
+      as part of the fix.
