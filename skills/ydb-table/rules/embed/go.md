@@ -44,7 +44,9 @@ Audit rules for application code talking to YDB through the Go SDK. Each rule is
 
 **What to look for**: an outer `for` / `for { ... }` / `for i := 0; i < N; i++` block whose body calls `db.Query().Do(ctx, ...)` or `db.Table().Do(ctx, ...)` and decides whether to repeat based on the returned error.
 
-**Fix**: remove the outer loop. `Do`/`DoTx` already classifies errors via `retry/mode.go` and replays the closure on retryable failures. An outer loop multiplies backoff, re-runs work on non-retryable errors the SDK has correctly decided not to retry, and breaks the SDK's retry budget. If the goal is "retry forever on a specific class" — pass it through `WithIdempotent` / retry options, not by wrapping.
+**Problem**: `Do`/`DoTx` already retries the closure internally with classified backoff (`retry/retry.go`, `retry/mode.go`). An outer loop multiplies the backoff schedule, re-runs work on non-retryable errors the SDK has correctly decided not to retry, and silently inflates the retry budget the caller thinks they configured.
+
+**Fix**: remove the outer loop. If the goal is "retry forever on a specific class", express it through `WithIdempotent` / retry options on the `Do` call, not by wrapping.
 
 **Source**: `ydb-platform/ydb-go-sdk/retry/retry.go` — `Retry` / `Do` / `DoTx` implement the retry loop internally with classified backoff. <https://github.com/ydb-platform/ydb-go-sdk/blob/master/retry/retry.go>.
 
@@ -54,7 +56,9 @@ Audit rules for application code talking to YDB through the Go SDK. Each rule is
 
 **What to look for**: `for` loop with explicit `time.Sleep(...)` between attempts, calling any YDB-facing method inside — session methods (`s.Execute`, `s.Query`, `s.BeginTransaction`), client-level methods (`db.Table().CreateSession`, `db.Table().Do`, `db.Query().Do`, `db.Query().DoTx`), or arbitrary user functions that themselves call into the SDK.
 
-**Fix**: delete the custom loop and use the SDK retrier (`db.Query().Do`, `db.Table().Do`, `retry.Retry` from `retry/`). A hand-rolled retrier doesn't see YDB's error classification — it replays every non-nil error indiscriminately: non-retryable failures (`PRECONDITION_FAILED`, schema mismatch) burn the retry budget, and conditionally-retryable failures (transport drops where the server may have committed) get retried with no idempotency gate, which can double-apply a non-idempotent write. The SDK retrier classifies via `retry/mode.go` `MustRetry(isOperationIdempotent bool)` and only retries the conditional bucket when `WithIdempotent` is set. Backoff with jitter and session-pool integration also come from the SDK retrier, not from caller-side `for`/`Sleep` code.
+**Problem**: a hand-rolled retrier replays every non-nil error indiscriminately. Non-retryable failures (`PRECONDITION_FAILED`, schema mismatch) burn the retry budget on errors that will never recover, and conditionally-retryable failures (transport drops where the server may have committed) get retried with no idempotency gate, which can double-apply a non-idempotent write. The SDK retrier classifies via `retry/mode.go` `MustRetry(isOperationIdempotent bool)` and only retries the conditional bucket when `WithIdempotent` is set; backoff with jitter and session-pool integration come from the same path.
+
+**Fix**: delete the custom loop and use the SDK retrier (`db.Query().Do`, `db.Table().Do`, `retry.Retry` from `retry/`); express tuning (max attempts, backoff envelope) through its options rather than in caller-side `for`/`Sleep` code.
 
 **Source**: `ydb-platform/ydb-go-sdk` — retry classification in <https://github.com/ydb-platform/ydb-go-sdk/blob/master/retry/mode.go>; retry loop and backoff in <https://github.com/ydb-platform/ydb-go-sdk/blob/master/retry/retry.go> and <https://github.com/ydb-platform/ydb-go-sdk/blob/master/retry/backoff.go>.
 
@@ -64,7 +68,9 @@ Audit rules for application code talking to YDB through the Go SDK. Each rule is
 
 **What to look for**: a `db.Query().Do(...)` or `db.Table().Do(...)` (or `DoTx`) appearing inside another `Do`/`DoTx` lambda. Any "retrier inside a retrier" shape.
 
-**Fix**: pass the session (`s`) through the call chain instead of opening a new retry scope. The inner `Do` checks out an independent session from the pool — under load this races for pool slots and can starve the caller; under retry it multiplies attempts combinatorially with the outer scope. Helpers called from inside a `Do` lambda must take `query.Session` (or `table.Session`) as a parameter and use the passed session directly.
+**Problem**: the inner `Do` checks out an independent session from the pool — under load this races for pool slots and can starve the caller, and under retry it multiplies attempts combinatorially with the outer scope. The pool and retry budget were sized for one scope, not two nested ones.
+
+**Fix**: pass the session (`s`) through the call chain instead of opening a new retry scope. Helpers called from inside a `Do` lambda must take `query.Session` (or `table.Session`) as a parameter and use the passed session directly.
 
 **Source**: `ydb-platform/ydb-go-sdk/retry/retry.go` — `Do` pool checkout semantics. <https://github.com/ydb-platform/ydb-go-sdk/blob/master/retry/retry.go>.
 
@@ -74,7 +80,9 @@ Audit rules for application code talking to YDB through the Go SDK. Each rule is
 
 **What to look for**: `fmt.Sprintf` building a query string, `"SELECT ... " + variable` concatenation, `text/template` rendering of a query body. Anything where caller values appear inside the YQL literal rather than as bound parameters.
 
-**Fix**: bind values through `ydb.ParamsBuilder().Param("$name").<Type>(value).Build()` and pass them via `query.WithParameters(...)` (or `table.NewQueryParameters(...)` for Table Service). Two failure modes the SDK's parameter API closes: SQL injection (caller values become YQL syntax when concatenated), and per-call query-plan miss (every distinct rendered text is a new plan in the server-side cache). A `DECLARE` block in the query body is optional — types are inferred from the bound values — and is justified when the parameter shape is compound (`List<Struct<...>>`) or when an explicit caller contract is desirable.
+**Problem**: two failure modes the SDK's parameter API closes at once. SQL injection — caller values become YQL syntax when concatenated. Per-call query-plan miss — the server's plan cache is keyed on query text, so every distinct rendered string forces a fresh plan compilation.
+
+**Fix**: bind values through `ydb.ParamsBuilder().Param("$name").<Type>(value).Build()` and pass them via `query.WithParameters(...)` (or `table.NewQueryParameters(...)` for Table Service). A `DECLARE` block in the query body is optional — types are inferred from the bound values — and is justified when the parameter shape is compound (`List<Struct<...>>`) or when an explicit caller contract is desirable.
 
 **Source**: `ydb-platform/ydb-go-sdk` — `ParamsBuilder` in <https://github.com/ydb-platform/ydb-go-sdk/blob/master/params_builder.go>; `query.WithParameters` in <https://github.com/ydb-platform/ydb-go-sdk/blob/master/query/execute_options.go>. YQL parameters reference: <https://ydb.tech/docs/en/yql/reference/syntax/declare>.
 
@@ -84,7 +92,9 @@ Audit rules for application code talking to YDB through the Go SDK. Each rule is
 
 **What to look for**: `ydb.WithBalancer(balancers.PreferLocalDC(...))` or `ydb.WithBalancer(balancers.PreferNearestDC(...))` (the rename — `PreferLocalDC` is marked `// Deprecated`, but `PreferNearestDC` has the same effect) in driver construction.
 
-**Fix**: drop the `WithBalancer(...)` option (or use `balancers.RandomChoice()` explicitly — that is what `balancers.Default()` returns). Prefer-DC balancers concentrate all client traffic on nodes in one datacenter — the "local" / "nearest" one — turning the cluster's other DCs into idle hot-standbys and the chosen DC into a saturation bottleneck. Cross-DC latency savings on individual requests are dwarfed by the throughput cliff once the chosen DC's nodes are saturated. `RandomChoice` picks an endpoint at random per request and spreads load evenly across every available node in the cluster.
+**Problem**: prefer-DC balancers concentrate all client traffic on nodes in the chosen "local" / "nearest" datacenter, turning the cluster's other DCs into idle hot-standbys and the chosen DC into a saturation bottleneck. Cross-DC latency savings on individual requests are dwarfed by the throughput cliff once the chosen DC's nodes saturate.
+
+**Fix**: drop the `WithBalancer(...)` option (or pass `balancers.RandomChoice()` explicitly — that's what `balancers.Default()` returns). `RandomChoice` picks an endpoint at random per request and spreads load evenly across every available node in the cluster.
 
 **Source**: `ydb-platform/ydb-go-sdk/balancers/balancers.go` — `PreferLocalDC` is marked `// Deprecated: use PreferNearestDC instead`; both have the same balancing semantics. <https://github.com/ydb-platform/ydb-go-sdk/blob/master/balancers/balancers.go>.
 
@@ -92,12 +102,14 @@ Audit rules for application code talking to YDB through the Go SDK. Each rule is
 
 **Severity**: Medium
 
-YDB supports two transaction styles. *Interactive* — the developer writes `begin` and `commit` calls. *Non-interactive* — the SDK manages the transaction inside `DoTx`; the developer influences it via options. In either mode, the begin can ride on the first query's RPC instead of being its own RPC.
+YDB supports two transaction styles. *Interactive* — the developer writes `begin` and `commit` calls. *Non-interactive* — the SDK manages the transaction inside `DoTx`; the developer influences it via options.
 
 **What to look for**:
 
 - *Interactive*: `s.BeginTransaction(ctx, ...)` or `s.Begin(ctx, ...)` returning a `tx` handle, followed by `tx.Exec(...)` / `tx.Query(...)` (Query Service) or `tx.Execute(...)` (Table Service).
 - *Non-interactive*: `db.Query().DoTx(...)` (or `db.Table().DoTx(...)`) on a driver opened without `ydb.WithLazyTx(true)`.
+
+**Problem**: the explicit begin is a standalone RPC that does no work — it just opens the transaction. Fusing it into the first query's RPC removes one round-trip per transaction. On a high-frequency OLTP path that's a measurable share of total latency and load.
 
 **Fix**:
 
@@ -112,13 +124,15 @@ YDB supports two transaction styles. *Interactive* — the developer writes `beg
 
 **Severity**: Medium
 
-Same split as RULE-GO-09. In either transaction style the commit can ride on the last query's RPC.
+Same interactive / non-interactive split as RULE-GO-09, applied to the commit side.
 
 **What to look for**:
 
 - *Interactive*: `tx.Commit(ctx)` / `tx.CommitTx(ctx)` called as a separate statement after the last `tx.Exec(...)` / `tx.Query(...)` (Query Service) or `tx.Execute(...)` (Table Service).
 - *Non-interactive*: `db.Query().DoTx(ctx, func(...) { ...; return nil })` where the last write inside the closure does not carry `query.WithCommit()`. `DoTx` will commit on return-nil, but as its own RPC.
 - *Doubly wrong*: an explicit `tx.CommitTx(ctx)` call **inside** a `DoTx` closure. `DoTx` already commits on return-nil per `query/client.go:DoTx` godoc; the explicit call is both redundant and a separate RPC.
+
+**Problem**: an explicit commit is a standalone RPC that does no work — it just terminates the transaction. Fusing it into the last query's RPC removes one round-trip per transaction. The doubly-wrong case adds redundant work on top: `DoTx` would have committed on return-nil anyway, so the explicit call is both useless and an extra round-trip.
 
 **Fix**: fuse the commit into the last query's RPC.
 
