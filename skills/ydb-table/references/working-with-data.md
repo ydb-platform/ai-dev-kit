@@ -82,7 +82,7 @@ Field order in the tuple must match the primary key — otherwise the predicate 
 
 Each batch is its own retry scope, so a transient failure replays only the current batch. Each batch is a key-ranged read, idempotent under the SDK's standard retry semantics; client-side memory in flight is bounded by `$batch`.
 
-The cursor lives in caller-side memory by default. To resume after a process restart, persist it outside YDB — a state row in a separate table, a file, a queue offset. The SDK has no built-in checkpoint API; checkpoints are application-level.
+The cursor lives in caller-side memory by default. To resume after a process restart, persist it durably outside the process — for example, in a separate state table, a file, or a queue offset. The SDK has no built-in checkpoint API; checkpoints are application-level.
 
 NULL in primary-key columns is discouraged: tuple comparison with NULL is undefined under the SQL standard, so the cursor predicate misbehaves.
 
