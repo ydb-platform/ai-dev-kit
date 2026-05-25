@@ -64,6 +64,32 @@ Sources: <https://ydb.tech/docs/en/dev/batch-upload>, <https://ydb.tech/docs/en/
 
 `BulkUpsert` (non-transactional API) — for ingest or migrations: large initial loads, periodic refreshes, replays. Throughput is the constraint, transactionality is not required, and the target schema has no synchronous secondary index or changefeed attached.
 
+## Reading many rows: long scans and resumable reads
+
+A `SELECT` that returns "all matching rows" is one streaming RPC and one retry unit. A transient failure mid-stream restarts the call from the top — every already-streamed row is re-read. The cost of a partial failure scales with the size of the match, not the size of the failure.
+
+The recipe is **keyset pagination by primary key**: an outer caller-side loop, each iteration reading one bounded batch. The query shape uses tuple comparison against the cursor:
+
+```yql
+SELECT ...
+FROM t
+WHERE (pk1, pk2, ...) > ($cur1, $cur2, ...)
+ORDER BY pk1, pk2, ...
+LIMIT $batch;
+```
+
+Field order in the tuple must match the primary key — otherwise the predicate is non-index-friendly and degenerates to a full scan. Terminate the outer loop when a page returns fewer than `$batch` rows.
+
+Each batch is its own retry scope, so a transient failure replays only the current batch. Each batch is a key-ranged read, idempotent under the SDK's standard retry semantics; client-side memory in flight is bounded by `$batch`.
+
+The cursor lives in caller-side memory by default. To resume after a process restart, persist it durably outside the process — for example, in a separate state table, a file, or a queue offset. The SDK has no built-in checkpoint API; checkpoints are application-level.
+
+NULL in primary-key columns is discouraged: tuple comparison with NULL is undefined under the SQL standard, so the cursor predicate misbehaves.
+
+`LIMIT $batch OFFSET $n` for large `$n` is the wrong shape — each page re-scans the rows skipped by `OFFSET`, so cost grows with page index. The recipe is keyset.
+
+Source: <https://ydb.tech/docs/en/dev/paging>.
+
 ## Related
 
 - [`../../ydb-core/SKILL.md#schema-basics`](../../ydb-core/SKILL.md#schema-basics) — primary-key shape and partitioning determine batch-ingest efficiency and transaction-conflict locality.

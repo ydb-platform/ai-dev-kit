@@ -65,6 +65,50 @@ Backoff and jitter are built in; configure via retry options on the `Do` / `DoTx
 
 Source: <https://github.com/ydb-platform/ydb-go-sdk/blob/master/retry/mode.go>.
 
+## Long scans / resumable reads
+
+One `s.Query(ctx, "SELECT ... FROM big_table WHERE <wide predicate>")` inside a single `Do` closure is one retry unit — a transient failure mid-stream replays the whole read. Cut the read into keyset-paginated batches: caller-side cursor over the primary key, each iteration is its own `Do`. See [`../working-with-data.md`](../working-with-data.md) → "Reading many rows" for the YDB-level recipe and the tuple-order / NULL / `OFFSET` caveats.
+
+```go
+type row struct {
+    id      uint64
+    payload string
+}
+
+var cursor uint64
+const batch = uint64(1000)
+for {
+    var page []row
+    err := db.Query().Do(ctx, func(ctx context.Context, s query.Session) error {
+        var local []row
+        res, err := s.Query(ctx,
+            `SELECT id, payload FROM t
+             WHERE id > $cursor
+             ORDER BY id
+             LIMIT $batch;`,
+            query.WithParameters(ydb.ParamsBuilder().
+                Param("$cursor").Uint64(cursor).
+                Param("$batch").Uint64(batch).
+                Build()),
+        )
+        if err != nil { return err }
+        defer func() { _ = res.Close(ctx) }()
+        // iterate res into local — see Query execution above for the scan shape
+        page = local
+        return nil
+    }, query.WithIdempotent())
+    if err != nil { return err }
+    if len(page) == 0 { break }
+    // process page
+    cursor = page[len(page)-1].id
+    if uint64(len(page)) < batch { break }
+}
+```
+
+`local` is built inside the closure and assigned to the outer `page` only on success — the same contract documented under `Query execution` above. `query.WithIdempotent()` is correct because each batch is a key-ranged SELECT. The cursor lives in caller memory; persist it externally to resume across process restarts (no SDK checkpoint API).
+
+Canonical upstream form with a compound primary key and a helper function: <https://github.com/ydb-platform/ydb-go-sdk/blob/master/examples/pagination/main.go>.
+
 ## Bulk upsert
 
 Use `db.Table().BulkUpsert(ctx, tablePath, rows)` for non-transactional ingest:
