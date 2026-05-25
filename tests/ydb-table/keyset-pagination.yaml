@@ -19,7 +19,7 @@ assert:
         pagination mechanism is a fail.
       - Bind cursor and limit through the SDK's typed parameter API
         (`ydb.ParamsBuilder()` with `.Param("$cursorCreatedAt").Timestamp(...)`,
-        `.Param("$cursorId").Uint64(...)`, and `.Param("$limit").Uint64(50)`).
+        `.Param("$cursorId").Uint64(...)`, and `.Param("$limit").Uint64(...)` (set to 50)).
         A leading `DECLARE` block
         in the query body is acceptable but not required (parameter types
         are inferred from the builder); raw-string interpolation of values
@@ -27,7 +27,7 @@ assert:
       - Wrap the per-page read in `db.Query().Do(ctx, func(ctx, s query.Session) error { ... })`
         and pass `query.WithIdempotent()` — the read is idempotent.
       - Show or describe the caller-side cursor loop that terminates when
-        a page returns fewer than 50 rows.
+        a page returns fewer than `$limit` rows.
 
       Partial credit if pagination shape is keyset but the Go wrapper is
       missing the retry-scope (`Do`) or `WithIdempotent`.
