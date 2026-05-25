@@ -115,6 +115,24 @@ providers:
         messages: *messages
         temperature: 0.2
         max_tokens: 2048
+  - id: https:z-ai/glm-4.7
+    label: Frontier OSS · Z.ai GLM 4.7
+    config:
+      <<: *http
+      body:
+        model: "z-ai/glm-4.7"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
+  - id: https:minimax/minimax-m2.7
+    label: Frontier OSS · MiniMax M2.7
+    config:
+      <<: *http
+      body:
+        model: "minimax/minimax-m2.7"
+        messages: *messages
+        temperature: 0.2
+        max_tokens: 2048
 
   # ── Laptop · Ollama-runnable ───────────────────────────────────────────
   - id: https:openai/gpt-oss-20b
