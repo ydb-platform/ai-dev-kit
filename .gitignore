@@ -11,3 +11,8 @@ __pycache__/
 # Specs (docs/superpowers/specs/) ARE committed per brainstorming/SKILL.md;
 # plans are not specified by the upstream skill, treated as scratch here.
 docs/superpowers/plans/
+
+# Grader-swap pre-validation cache. Holds per-cell candidate-grader
+# verdicts (see scripts/grader-agreement.py). Rebuildable from the eval
+# IDs in the commit message + the cache-namespaced cache key scheme.
+.grader-agreement-cache.json
