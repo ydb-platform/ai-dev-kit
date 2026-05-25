@@ -120,6 +120,11 @@ def main() -> int:
 
     cats = ["SKILL_WORKS", "REDUNDANT", "INSUFFICIENT", "SKILL_HARMS", "UNRATED"]
     total = sum(counts_sonnet.values())
+    if not total:
+        sys.exit(
+            "no overlapping (provider, test) pairs between skill and bare evals — "
+            "check that the four --eval IDs all reference the same matrix run."
+        )
     print(f"  {'verdict':14} {'Sonnet now':>12} {'Haiku proj':>12}  Δ")
     for c in cats:
         s = counts_sonnet.get(c, 0)

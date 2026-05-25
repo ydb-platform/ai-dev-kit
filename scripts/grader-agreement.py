@@ -106,10 +106,12 @@ def call_grader(model: str, prompt_text: str, api_key: str, max_retries: int = 4
     body = json.dumps(payload).encode()
     last_err = None
     for attempt in range(max_retries):
+        raw_text = ""
         try:
             req = urllib.request.Request(OPENROUTER_URL, data=body, headers=headers)
             with urllib.request.urlopen(req, timeout=120) as resp:
-                data = json.loads(resp.read().decode())
+                raw_text = resp.read().decode()
+            data = json.loads(raw_text)
             content = data["choices"][0]["message"]["content"].strip()
             return parse_grader_reply(content)
         except urllib.error.HTTPError as e:
@@ -122,7 +124,9 @@ def call_grader(model: str, prompt_text: str, api_key: str, max_retries: int = 4
             last_err = f"{type(e).__name__}: {e}"
             time.sleep(2 ** attempt)
         except (KeyError, json.JSONDecodeError, IndexError) as e:
-            return {"pass": None, "score": None, "reason": f"shape: {e}", "raw": str(data)[:200]}
+            # raw_text holds the response body even if json.loads failed before
+            # `data` was assigned — avoids UnboundLocalError on malformed JSON.
+            return {"pass": None, "score": None, "reason": f"shape: {e}", "raw": raw_text[:200]}
     return {"pass": None, "score": None, "reason": f"giving up: {last_err}", "raw": ""}
 
 
@@ -140,10 +144,19 @@ def parse_grader_reply(content: str) -> dict:
         obj = json.loads(m.group(0))
     except json.JSONDecodeError:
         return {"pass": None, "score": None, "reason": "JSON parse error", "raw": content[:200]}
+    raw_pass = obj.get("pass")
+    if isinstance(raw_pass, bool):
+        pass_value: bool | None = raw_pass
+    elif isinstance(raw_pass, str) and raw_pass.lower() in ("true", "false"):
+        pass_value = raw_pass.lower() == "true"
+    else:
+        # Anything else — None, number, dict, unexpected string — is unparseable.
+        # `bool("false")` is True in Python, so we must not blindly coerce.
+        return {"pass": None, "score": None, "reason": f"non-bool pass field: {raw_pass!r}", "raw": content[:200]}
     return {
-        "pass": bool(obj.get("pass")) if obj.get("pass") is not None else None,
+        "pass": pass_value,
         "score": obj.get("score"),
-        "reason": obj.get("reason", "")[:300],
+        "reason": str(obj.get("reason", ""))[:300],
         "raw": content[:200],
     }
 
