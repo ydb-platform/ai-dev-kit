@@ -218,13 +218,18 @@ defaultTest:
   # assertion so grader quality is a fixed constant across the matrix.
   options:
     provider:
-      id: https:anthropic/claude-sonnet-4.6-grader
+      id: https:anthropic/claude-haiku-4.5-grader
       config:
         <<: *http
         # Grader receives the rendered rubricPrompt via promptfoo's `prompt`
         # var — NOT the test's user_prompt. We pass it as a single user turn.
+        # Haiku 4.5 replaced Sonnet 4.6 on 2026-05-25 — Haiku is ~10× cheaper
+        # and pre-validated as systematically stricter (93.6% agreement on
+        # skill outputs, 83.1% on bare; disagreements concentrate on
+        # borderline rubric-clause enforcement, not noise). See PR with
+        # `scripts/grader-agreement.py` for the pre-validation method.
         body:
-          model: "anthropic/claude-sonnet-4.6"
+          model: "anthropic/claude-haiku-4.5"
           messages:
             - role: user
               content: "{{ prompt }}"
