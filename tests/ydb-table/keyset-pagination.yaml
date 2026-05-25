@@ -33,7 +33,7 @@ assert:
       missing the retry-scope (`Do`) or `WithIdempotent`.
 
       Full fail if the response:
-      - Uses `LIMIT 50 OFFSET $n` as the pagination mechanism.
+      - Uses `OFFSET` (e.g. `LIMIT $limit OFFSET $n`) as the pagination mechanism.
       - Interpolates the cursor or limit into the query string via
         `fmt.Sprintf` / string concatenation.
       - Puts the cursor field order in the tuple comparison in a different
