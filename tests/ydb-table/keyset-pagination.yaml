@@ -12,14 +12,15 @@ assert:
       The response should:
       - Use keyset pagination over the primary key with tuple comparison —
         `WHERE (created_at, id) > ($cursorCreatedAt, $cursorId)` (or
-        equivalent compound predicate) and `ORDER BY created_at, id LIMIT 50`.
+        equivalent compound predicate) and `ORDER BY created_at, id LIMIT $limit`.
         The field order in the tuple must match the primary key.
       - Avoid `OFFSET` for pagination. Citing `OFFSET` only to explain why
         it's the wrong shape is acceptable; recommending `OFFSET` as the
         pagination mechanism is a fail.
       - Bind cursor and limit through the SDK's typed parameter API
-        (`ydb.ParamsBuilder()` with `.Param("$cursorCreatedAt").Timestamp(...)`
-        and `.Param("$cursorId").Uint64(...)`). A leading `DECLARE` block
+        (`ydb.ParamsBuilder()` with `.Param("$cursorCreatedAt").Timestamp(...)`,
+        `.Param("$cursorId").Uint64(...)`, and `.Param("$limit").Uint64(50)`).
+        A leading `DECLARE` block
         in the query body is acceptable but not required (parameter types
         are inferred from the builder); raw-string interpolation of values
         into the query text is a fail.
