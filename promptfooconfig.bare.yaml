@@ -176,11 +176,15 @@ defaultTest:
       value: "[provider error]"
   options:
     provider:
-      id: https:anthropic/claude-sonnet-4.6-grader
+      id: https:anthropic/claude-haiku-4.5-grader
       config:
         <<: *http
         body:
-          model: "anthropic/claude-sonnet-4.6"
+          # Haiku 4.5 replaced Sonnet 4.6 on 2026-05-25 — see promptfooconfig.yaml
+          # for the pre-validation rationale. Bare-mode rubric uses the exact
+          # same grader / template / temperature as the skill matrix, so both
+          # are calibrated on the same axis.
+          model: "anthropic/claude-haiku-4.5"
           messages:
             - role: user
               content: "{{ prompt }}"
