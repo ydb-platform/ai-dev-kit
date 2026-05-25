@@ -85,7 +85,7 @@ def cell_map(data: dict) -> dict[tuple[str, str], dict]:
         out[(prov, test)] = {
             "success": bool(r.get("success")),
             "transport_error": r.get("failureReason") == 2,
-            "output": ((r.get("response") or {}).get("output") or "")[:200],
+            "output": (str((r.get("response") or {}).get("output") or ""))[:200],
         }
     return out
 
@@ -115,17 +115,50 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--skill", help="eval ID of the main (skill-loaded) run")
     parser.add_argument("--bare", help="eval ID of the bare control run")
+    parser.add_argument(
+        "--skill-retry",
+        help="eval ID of a --filter-errors-only retry of --skill; "
+        "overlays cells that were transport_error in the base eval",
+    )
+    parser.add_argument(
+        "--bare-retry",
+        help="eval ID of a --filter-errors-only retry of --bare; same overlay semantics",
+    )
     args = parser.parse_args()
 
     skill_id = args.skill or find_latest(SKILL_DESCRIPTION)
     bare_id = args.bare or find_latest(BARE_DESCRIPTION)
-    print(f"skill eval: {skill_id}")
-    print(f"bare eval:  {bare_id}\n")
+    print(f"skill eval: {skill_id}" + (f"  + retry {args.skill_retry}" if args.skill_retry else ""))
+    print(f"bare eval:  {bare_id}" + (f"  + retry {args.bare_retry}" if args.bare_retry else ""))
+    print()
 
     skill_data = export_eval(skill_id)
     bare_data = export_eval(bare_id)
     skill_cells = cell_map(skill_data)
     bare_cells = cell_map(bare_data)
+
+    # Overlay: only replace cells that errored in the base. Cells that
+    # passed or assertion-failed in the base are authoritative — the retry
+    # only re-runs --filter-errors-only, so any cell present in both was
+    # an error in the base and the retry's verdict supersedes.
+    def overlay(base: dict, retry_id: str | None) -> dict:
+        if not retry_id:
+            return base
+        retry_cells = cell_map(export_eval(retry_id))
+        merged = dict(base)
+        replaced = 0
+        for key, retry_cell in retry_cells.items():
+            base_cell = merged.get(key)
+            if base_cell and base_cell["transport_error"]:
+                merged[key] = retry_cell
+                replaced += 1
+        print(f"  overlaid {replaced} error cells from {retry_id}")
+        return merged
+
+    skill_cells = overlay(skill_cells, args.skill_retry)
+    bare_cells = overlay(bare_cells, args.bare_retry)
+    if args.skill_retry or args.bare_retry:
+        print()
 
     # Per-test summary across providers.
     per_test: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
