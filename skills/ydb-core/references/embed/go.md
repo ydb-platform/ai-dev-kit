@@ -40,33 +40,6 @@ err := db.Query().Do(ctx, func(ctx context.Context, s query.Session) error {
 
 Canonical: `ydb-go-sdk/examples/basic/native/query/series.go`.
 
-## Anti-pattern: stored `Session`
-
-```go
-type Repo struct {
-    db      *ydb.Driver
-    session query.Session         // ← held outside the pool
-}
-func (r *Repo) Init(ctx context.Context) (err error) {
-    r.session, err = r.db.Query().CreateSession(ctx)
-    return
-}
-```
-
-Fix: drop the field, call `db.Query().Do(...)` per operation.
-
-## Anti-pattern: wrapping `Do` in a retry loop
-
-```go
-for {
-    err := db.Query().Do(ctx, fn, query.WithIdempotent())
-    if err == nil { break }
-    time.Sleep(time.Second)       // ← Do already retries with classified backoff
-}
-```
-
-Configure attempts/backoff through `Do` options.
-
 ## Server-side balancer is automatic
 
 SDK attaches `session-balancer` capability header per request (`ydb-go-sdk/internal/meta/headers.go: HintSessionBalancer = "session-balancer"`). No application config — but requires using `Do`/`DoTx`, not a stored `Session`.
