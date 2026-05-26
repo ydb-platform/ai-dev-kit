@@ -86,16 +86,6 @@ Auth env vars (canonical reference: https://ydb.tech/docs/en/reference/ydb-sdk/a
 - `YDB_STATIC_CREDENTIALS_USER` + `YDB_STATIC_CREDENTIALS_PASSWORD` + `YDB_STATIC_CREDENTIALS_ENDPOINT` — static user/password auth.
 - `YDB_ANONYMOUS_CREDENTIALS` — local Docker only. Value semantics differ per SDK; check the auth doc.
 
-## balancing
-
-Random spread across all discovered endpoints is the right default. In Go (`ydb-go-sdk/v3`) this is `balancers.RandomChoice()`, applied when `ydb.Open(...)` carries no `WithBalancer` option.
-
-Prefer-DC variants (Go: `balancers.PreferLocalDC` — marked `// Deprecated` upstream — and `balancers.PreferNearestDC`) concentrate traffic on one DC's nodes. Failure modes: DC-skewed load, drill / rolling-restart stickiness, cross-DC tablet hops defeating the locality goal. Pays off only with followers + `StaleRO`. See `references/balancing.md`.
-
-Sessions are pooled per driver. Application code runs every operation through the pool wrapper (Go: `db.Query().Do(ctx, fn)`); a `Session` stored in a struct field bypasses the server's `session-balancer` capability and surfaces `BAD_SESSION` during rolling restart. See `references/session-lifecycle.md`.
-
-Audit: driver/session anti-patterns in `rules/embed/go.md`; the prefer-DC balancer and `WithIdempotent` mismatch live in the ydb-table rules file (its triggers fire on Go driver-construction code).
-
 ## local-deployment
 
 Single-node docker (https://ydb.tech/docs/en/quickstart):

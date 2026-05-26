@@ -38,7 +38,6 @@ The body of `SKILL.md` carries stable section anchors so other skills can deep-l
 - `## surfaces` — router to `ydb-table`, `ydb-topics`, `ydb-coordination`
 - `## packages` — SDK repos, install coordinates, CLI, JDBC
 - `## connecting` — connection strings, auth env vars, CLI profile
-- `## balancing` — client-side balancer defaults, session ownership, `shutdownHint`
 - `## local-deployment` — Docker / Kubernetes / Ansible
 - `## integrations` — ORMs, migration tools, Terraform, Spark, EF Core
 - `## schema-basics` — LLM failure modes on YDB schemas with concrete fixes
