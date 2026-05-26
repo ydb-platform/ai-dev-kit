@@ -1,6 +1,6 @@
 ---
 name: ydb-core
-description: Entry point and router for YDB-related work. Orients an LLM about YDB — what it is, what surfaces it exposes, where to read upstream docs, which specialist skill to load for surface-specific questions. Covers SDK packages, connection strings and auth, local Docker, schema fundamentals, and common integrations (ORMs, migration tools, Terraform). Use when the user asks a general YDB question, mentions YDB without naming a specific surface (queries, topics, coordination), needs setup help, or when another YDB skill needs foundational context. Also triggers on `grpcs://` / `grpc://`, `ydb profile`, `ydb scheme`, and "getting started with YDB" prompts.
+description: Entry point and router for YDB-related work. Orients an LLM about YDB — what it is, what surfaces it exposes, where to read upstream docs, which specialist skill to load for surface-specific questions. Covers SDK packages, connection strings and auth, local Docker, schema fundamentals, common integrations (ORMs, migration tools, Terraform), client-side balancing, and session lifecycle / resilience under rolling restart. Use when the user asks a general YDB question, mentions YDB without naming a specific surface (queries, topics, coordination), needs setup help, asks about balancing policies or `BAD_SESSION` / `shutdownHint` / rolling restart, or when another YDB skill needs foundational context. Also triggers on `grpcs://` / `grpc://`, `ydb profile`, `ydb scheme`, `balancers.RandomChoice`, `balancers.PreferNearestDC`, `ydb.WithBalancer`, `use_all_nodes`, `TBalancingPolicy`, `SetBalancingPolicy`, `session-balancer`, and "getting started with YDB" prompts.
 ---
 
 # YDB Core
@@ -85,6 +85,20 @@ Auth env vars (canonical reference: https://ydb.tech/docs/en/reference/ydb-sdk/a
 - `YDB_OAUTH2_KEY_FILE` — OAuth2 key file.
 - `YDB_STATIC_CREDENTIALS_USER` + `YDB_STATIC_CREDENTIALS_PASSWORD` + `YDB_STATIC_CREDENTIALS_ENDPOINT` — static user/password auth.
 - `YDB_ANONYMOUS_CREDENTIALS` — local Docker only. Value semantics differ per SDK; check the auth doc.
+
+## balancing
+
+Random spread across all discovered endpoints is the right default. Per-SDK:
+
+- **Go** (`ydb-go-sdk/v3`): `balancers.RandomChoice()`, applied when `ydb.Open` carries no `WithBalancer`.
+- **Python** (`ydb`): `use_all_nodes=True` on `ydb.Driver(...)` (default).
+- **C++** (`ydb-cpp-sdk`): `TDriverConfig.SetBalancingPolicy(TBalancingPolicy::UseAllNodes())` — **C++ default is prefer-DC, must opt out explicitly**.
+
+Prefer-DC variants (`balancers.PreferLocalDC`/`PreferNearestDC`, `use_all_nodes=False`, `UsePreferableLocation()`) concentrate traffic on one DC's nodes. Failure modes: DC-skewed load, drill / rolling-restart stickiness, cross-DC tablet hops defeating the locality goal. Pays off only with followers + `StaleRO`. See `references/balancing.md`.
+
+Sessions are pooled per driver. Application code runs every operation through the pool wrapper (Go: `db.Query().Do(ctx, fn, query.WithIdempotent())`); a `Session` stored in a struct field bypasses the server's `session-balancer` capability and surfaces `BAD_SESSION` during rolling restart. See `references/session-lifecycle.md`.
+
+Audit: `RULE-GO-11` (long-lived session) in `rules/embed/go.md`. Related rules in `../ydb-table/rules/embed/go.md`: `RULE-GO-08` (prefer-DC balancer), `RULE-GO-03` (`WithIdempotent` mismatch).
 
 ## local-deployment
 
