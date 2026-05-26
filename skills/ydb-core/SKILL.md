@@ -98,7 +98,7 @@ Prefer-DC variants (`balancers.PreferLocalDC`/`PreferNearestDC`, `use_all_nodes=
 
 Sessions are pooled per driver. Application code runs every operation through the pool wrapper (Go: `db.Query().Do(ctx, fn, query.WithIdempotent())`); a `Session` stored in a struct field bypasses the server's `session-balancer` capability and surfaces `BAD_SESSION` during rolling restart. See `references/session-lifecycle.md`.
 
-Audit: `RULE-GO-11` (long-lived session) in `rules/embed/go.md`. Related rules in `../ydb-table/rules/embed/go.md`: `RULE-GO-08` (prefer-DC balancer), `RULE-GO-03` (`WithIdempotent` mismatch).
+Audit: driver/session anti-patterns in `rules/embed/go.md`; the prefer-DC balancer and `WithIdempotent` mismatch live in the ydb-table rules file (its triggers fire on Go driver-construction code).
 
 ## local-deployment
 

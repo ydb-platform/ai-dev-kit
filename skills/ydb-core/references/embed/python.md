@@ -8,8 +8,8 @@ Principles: [`../balancing.md`](../balancing.md), [`../session-lifecycle.md`](..
 import ydb
 
 with ydb.Driver(
-    endpoint=os.environ["YDB_ENDPOINT"],
-    database=os.environ["YDB_DATABASE"],
+    endpoint=endpoint,
+    database=database,
     credentials=ydb.credentials_from_env_variables(),
 ) as driver:
     driver.wait(timeout=5)

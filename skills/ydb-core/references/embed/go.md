@@ -21,8 +21,6 @@ db, err := ydb.Open(ctx, connStr, ydb.WithBalancer(balancers.RandomChoice()))
 `balancers.PreferLocalDC(...)` — marked `// Deprecated: use PreferNearestDC instead`. Both have the same semantics.
 `balancers.PreferNearestDC(...)`, `balancers.PreferLocalDCWithFallback(...)` — same family.
 
-Audit: `RULE-GO-08` in `ydb-table/rules/embed/go.md`.
-
 ## Run every operation through `Do` / `DoTx`
 
 ```go
@@ -38,7 +36,7 @@ err := db.Query().Do(ctx, func(ctx context.Context, s query.Session) error {
 }, query.WithIdempotent())
 ```
 
-`query.WithIdempotent()` declares the closure safe to replay on conditional failures (transport drops, session loss). Omit on non-idempotent writes (audit: `RULE-GO-03`).
+`query.WithIdempotent()` declares the closure safe to replay on conditional failures (transport drops, session loss). Omit on non-idempotent writes (counter increment, unkeyed `INSERT`); make those idempotent first (client-generated id, dedup table) before opting in.
 
 Canonical: `ydb-go-sdk/examples/basic/native/query/series.go`.
 
@@ -55,7 +53,7 @@ func (r *Repo) Init(ctx context.Context) (err error) {
 }
 ```
 
-Fix: drop the field, call `db.Query().Do(...)` per operation. Audit: `RULE-GO-11` in `../../rules/embed/go.md`.
+Fix: drop the field, call `db.Query().Do(...)` per operation.
 
 ## Anti-pattern: wrapping `Do` in a retry loop
 
@@ -67,7 +65,7 @@ for {
 }
 ```
 
-Configure attempts/backoff through `Do` options. Audit: `RULE-GO-04`, `RULE-GO-05`.
+Configure attempts/backoff through `Do` options.
 
 ## Server-side balancer is automatic
 
