@@ -1,38 +1,37 @@
-# Matrix baseline — 2026-05-25 (Haiku grader)
+# Matrix baseline — 2026-05-26 (Haiku grader, PR #4)
 
-Snapshot of the A/B compatibility matrix at a known-good point. Future
-edits to skills should be compared against this — a meaningful change
-should move cells from `REDUNDANT` / `INSUFFICIENT` toward `SKILL_WORKS`
-without regressing `SKILL_WORKS` cells.
+Snapshot of the A/B compatibility matrix after ai-dev-kit#4 (`ydb-core`
+balancing references + RULE-GO-11). Future edits to skills should be
+compared against this — a meaningful change should move cells from
+`REDUNDANT` / `INSUFFICIENT` toward `SKILL_WORKS` without regressing
+`SKILL_WORKS` cells.
 
-> **Methodology refresh, 2026-05-25 (this snapshot).** The rubric grader
-> switched from `anthropic/claude-sonnet-4.6` to
-> `anthropic/claude-haiku-4.5` — Haiku is ~10× cheaper and was
-> pre-validated as systematically stricter (93.6% pass/fail agreement
-> with Sonnet on skill-loaded outputs, 83.1% on bare-control outputs;
-> disagreements concentrate on borderline rubric-clause enforcement,
-> not noise). See `scripts/grader-agreement.py` for the validation
-> method and `scripts/simulate-grader-swap.py` for the dry-run
-> projection. The headline shifts below come from the grader swap, not
-> from skill or test changes.
+> **Snapshot scope (2026-05-26, this PR).** Same grader
+> (`anthropic/claude-haiku-4.5`), same provider mix, same tests as the
+> 211-baseline. Only delta: `ydb-core` gained `references/balancing.md`,
+> `references/session-lifecycle.md`, `references/embed/go.md`, and
+> `rules/embed/go.md` (RULE-GO-11), all wired into the eval system
+> prompt via `promptfooconfig.yaml`. Bare control re-uses
+> `eval-cI8-2026-05-25T13:00:02` (bare config unchanged by this PR;
+> all its cells would have been cache hits anyway).
 
 ## How this was produced
 
 ```bash
 export OPENROUTER_API_KEY="..."
-npx promptfoo@latest eval                                # skill loaded
-npx promptfoo@latest eval -c promptfooconfig.bare.yaml   # bare control
-python3 scripts/ab-compare.py
+npx promptfoo@latest eval                                # skill loaded (new ID below)
+# bare control reused from the 211-baseline — bare config unchanged.
+python3 scripts/ab-compare.py --skill <new-id> --bare eval-cI8-2026-05-25T13:00:02
 ```
 
 - **11 providers** × **27 tests** = 297 cells per side.
-- Concurrency 12. **No transport / credit errors** — both sides
-  completed in a single pass in ~12 min each (no retries needed this
-  time, unlike the 2026-05-25 Sonnet baseline).
+- Concurrency 12. **No transport / credit errors** in the final pass —
+  one partial pass earlier in the day hit the OpenRouter monthly cap
+  (281 cells / 297 erroring); after a key top-up the rerun completed
+  in 9m 21s with 0 errors.
 - Reasoning disabled only on Moonshot Kimi K2.6 — other providers reject
-  the flag (`reasoning: { enabled: false }` → HTTP 400). For Qwen3.6
-  35B-A3B and OpenAI gpt-oss-20b (also thinking models) we leave
-  reasoning on and bump `max_tokens` to 8192 instead. See
+  the flag. For Qwen3.6 35B-A3B and OpenAI gpt-oss-20b we leave
+  reasoning on and bump `max_tokens` to 8192. See
   [`docs/testing.md`](docs/testing.md#speed-knobs).
 
 ## Provider mix
@@ -69,160 +68,146 @@ main matrix verdict against the bare-control verdict:
 ## Snapshot
 
 ```
-skill eval: eval-MSx-2026-05-25T12:59:55
+skill eval: eval-lQE-2026-05-26T02:41:54
 bare eval:  eval-cI8-2026-05-25T13:00:02
 grader:     anthropic/claude-haiku-4.5
 
 ──────────────────────────────────────────────────────────────────────────────
 Headline (cells across all providers × tests)
 ──────────────────────────────────────────────────────────────────────────────
-  + SKILL_WORKS     211  ( 71.0%)
-  . REDUNDANT        48  ( 16.2%)
-  x INSUFFICIENT     35  ( 11.8%)
-  ! SKILL_HARMS       3  (  1.0%)
+  + SKILL_WORKS     219  ( 73.7%)
+  . REDUNDANT        51  ( 17.2%)
+  x INSUFFICIENT     27  (  9.1%)
+  ! SKILL_HARMS       0  (  0.0%)
   ? ERROR             0  (  0.0%)
 
 ──────────────────────────────────────────────────────────────────────────────
 Per-test (aggregated across providers)
 ──────────────────────────────────────────────────────────────────────────────
   TEST                                                    works  redu insuf harms
-  Core · Cloud auth without hardcoded credentials             3     6     0     2
-  Core · Local Docker + Python quickstart                     7     3     1     0
-  Core · Onboarding — 3-minute YDB intro for a newcomer       6     4     1     0
-  Go audit · Custom retrier with time.Sleep (RULE-GO-05)      4     6     1     0
-  Go audit · Explicit BeginTransaction before first query     8     1     2     0
+  Core · Cloud auth without hardcoded credentials             3     8     0     0
+  Core · Local Docker + Python quickstart                     8     3     0     0
+  Core · Onboarding — 3-minute YDB intro for a newcomer       7     4     0     0
+  Go audit · Custom retrier with time.Sleep (RULE-GO-05)      5     6     0     0
+  Go audit · Explicit BeginTransaction before first query     9     1     1     0
   Go audit · External state mutation from Do retry closur     9     1     1     0
-  Go audit · Interactive Table Service `tx.CommitTx` as a     6     0     5     0
+  Go audit · Interactive Table Service `tx.CommitTx` as a     5     0     6     0
   Go audit · Missing WithIdempotent on Do (RULE-GO-03)        8     1     2     0
   Go audit · Nested Do call (RULE-GO-06)                      6     5     0     0
   Go audit · Non-interactive DoTx auto-commit without `qu    11     0     0     0
-  Go audit · Non-interactive DoTx without `ydb.WithLazyTx    11     0     0     0
-  Go audit · Non-parametrized YQL via fmt.Sprintf (RULE-G     7     3     1     0
-  Go audit · PreferLocalDC / PreferNearestDC balancer (RU     8     0     3     0
-  Go audit · PreferNearestDC balancer (RULE-GO-08, curren     9     0     2     0
-  Go audit · Reading all matching rows through Table Serv    10     1     0     0
-  Go audit · Separate Commit after last query (RULE-GO-10     5     1     5     0
+  Go audit · Non-interactive DoTx without `ydb.WithLazyTx    10     0     1     0
+  Go audit · Non-parametrized YQL via fmt.Sprintf (RULE-G     6     3     2     0
+  Go audit · PreferLocalDC / PreferNearestDC balancer (RU    10     0     1     0
+  Go audit · PreferNearestDC balancer (RULE-GO-08, curren    10     0     1     0
+  Go audit · Reading all matching rows through Table Serv     8     1     2     0
+  Go audit · Separate Commit after last query (RULE-GO-10     8     1     2     0
   Go audit · `ydb.WithIgnoreTruncated` masking Table Serv    10     1     0     0
-  Go audit · for-loop wrapping Do (RULE-GO-04)                8     1     2     0
-  Java audit · JDBC batching not configured (RULE-JV-02)      5     6     0     0
-  Java audit · JPA @Version over YDB (RULE-JV-05)            10     0     1     0
+  Go audit · for-loop wrapping Do (RULE-GO-04)                9     1     1     0
+  Java audit · JDBC batching not configured (RULE-JV-02)      4     6     1     0
+  Java audit · JPA @Version over YDB (RULE-JV-05)            11     0     0     0
   Java audit · Spring save() in a loop (RULE-JV-03)           6     5     0     0
   Java audit · deleteAllById on bulk path (RULE-JV-04)       10     0     1     0
   Java audit · findById in a loop (RULE-JV-01)               11     0     0     0
   Java audit · ignoring retryable JDBC exceptions (RULE-J    11     0     0     0
   Query · Converting PostgreSQL SERIAL to YQL                 9     2     0     0
-  Query · Keyset pagination in YQL + Go                       8     0     3     0
-  Query · Primary-key design for IoT events (monotonic-PK     5     1     4     1
+  Query · Keyset pagination in YQL + Go                      10     0     1     0
+  Query · Primary-key design for IoT events (monotonic-PK     5     2     4     0
 
 ──────────────────────────────────────────────────────────────────────────────
-Notable cells (sorted by verdict severity)
+INSUFFICIENT cells (the 27)
 ──────────────────────────────────────────────────────────────────────────────
-  ! SKILL_HARMS    Frontier · Anthropic Opus 4.7             Query · Primary-key design for IoT events
-  ! SKILL_HARMS    Frontier · OpenAI GPT-5.3 Codex           Core · Cloud auth without hardcoded credentials
-  ! SKILL_HARMS    Laptop · OpenAI gpt-oss-20b               Core · Cloud auth without hardcoded credentials
-
-  x INSUFFICIENT   Frontier OSS · DeepSeek v4-Pro            Core · Local Docker + Python quickstart
-  x INSUFFICIENT   Laptop · Mistral Devstral Small           Core · Onboarding — 3-minute YDB intro
-  x INSUFFICIENT   Laptop · Mistral Devstral Small           Go audit · Custom retrier with time.Sleep
-  x INSUFFICIENT   Frontier OSS · MiniMax M2.7               Go audit · Explicit BeginTransaction
-  x INSUFFICIENT   Laptop · Mistral Devstral Small           Go audit · Explicit BeginTransaction
-  x INSUFFICIENT   Laptop · Mistral Devstral Small           Go audit · External state mutation from Do
-  x INSUFFICIENT   Frontier OSS · DeepSeek v4-Pro            Go audit · Interactive Table Service `tx.CommitTx`
-  x INSUFFICIENT   Frontier · Anthropic Opus 4.7             Go audit · Interactive Table Service `tx.CommitTx`
-  x INSUFFICIENT   Laptop · Mistral Devstral Small           Go audit · Interactive Table Service `tx.CommitTx`
-  x INSUFFICIENT   Laptop · OpenAI gpt-oss-20b               Go audit · Interactive Table Service `tx.CommitTx`
-  x INSUFFICIENT   Laptop · Qwen3.6 35B-A3B                  Go audit · Interactive Table Service `tx.CommitTx`
-  x INSUFFICIENT   Laptop · Mistral Devstral Small           Go audit · Missing WithIdempotent on Do
-  x INSUFFICIENT   Laptop · OpenAI gpt-oss-20b               Go audit · Missing WithIdempotent on Do
-  x INSUFFICIENT   Laptop · Qwen3.6 35B-A3B                  Go audit · Non-parametrized YQL via fmt.Sprintf
-  x INSUFFICIENT   Frontier OSS · DeepSeek v4-Pro            Go audit · PreferLocalDC / PreferNearestDC
-  x INSUFFICIENT   Frontier OSS · MiniMax M2.7               Go audit · PreferLocalDC / PreferNearestDC
-  x INSUFFICIENT   Frontier OSS · Qwen3.6 Plus               Go audit · PreferLocalDC / PreferNearestDC
-  x INSUFFICIENT   Frontier OSS · MiniMax M2.7               Go audit · PreferNearestDC balancer
-  x INSUFFICIENT   Laptop · Mistral Devstral Small           Go audit · PreferNearestDC balancer
-  x INSUFFICIENT   Frontier OSS · DeepSeek v4-Pro            Go audit · Separate Commit after last query
-  x INSUFFICIENT   Frontier OSS · MiniMax M2.7               Go audit · Separate Commit after last query
-  x INSUFFICIENT   Frontier OSS · Moonshot Kimi K2.6         Go audit · Separate Commit after last query
-  x INSUFFICIENT   Frontier OSS · Z.ai GLM 4.7               Go audit · Separate Commit after last query
-  x INSUFFICIENT   Laptop · OpenAI gpt-oss-20b               Go audit · Separate Commit after last query
-  x INSUFFICIENT   Laptop · Mistral Devstral Small           Go audit · for-loop wrapping Do
-  x INSUFFICIENT   Laptop · OpenAI gpt-oss-20b               Go audit · for-loop wrapping Do
-  x INSUFFICIENT   Laptop · OpenAI gpt-oss-20b               Java audit · JPA @Version over YDB
-  x INSUFFICIENT   Laptop · Mistral Devstral Small           Java audit · deleteAllById on bulk path
-  x INSUFFICIENT   Frontier OSS · MiniMax M2.7               Query · Keyset pagination in YQL + Go
-  x INSUFFICIENT   Frontier · Google Gemini 3.1 Pro          Query · Keyset pagination in YQL + Go
-  x INSUFFICIENT   Frontier · OpenAI GPT-5.3 Codex           Query · Keyset pagination in YQL + Go
-  x INSUFFICIENT   Frontier OSS · Z.ai GLM 4.7               Query · Primary-key design for IoT events
-  x INSUFFICIENT   Frontier · Google Gemini 3.1 Pro          Query · Primary-key design for IoT events
-  x INSUFFICIENT   Laptop · OpenAI gpt-oss-20b               Query · Primary-key design for IoT events
-  x INSUFFICIENT   Laptop · Qwen3.6 35B-A3B                  Query · Primary-key design for IoT events
+  Laptop · OpenAI gpt-oss-20b               Go audit · Explicit BeginTransaction
+  Laptop · Mistral Devstral Small           Go audit · External state mutation from Do
+  Frontier OSS · MiniMax M2.7               Go audit · Interactive Table Service tx.CommitTx
+  Frontier OSS · Moonshot Kimi K2.6         Go audit · Interactive Table Service tx.CommitTx
+  Frontier OSS · Z.ai GLM 4.7               Go audit · Interactive Table Service tx.CommitTx
+  Laptop · Mistral Devstral Small           Go audit · Interactive Table Service tx.CommitTx
+  Laptop · OpenAI gpt-oss-20b               Go audit · Interactive Table Service tx.CommitTx
+  Laptop · Qwen3.6 35B-A3B                  Go audit · Interactive Table Service tx.CommitTx
+  Frontier OSS · MiniMax M2.7               Go audit · Missing WithIdempotent on Do
+  Laptop · OpenAI gpt-oss-20b               Go audit · Missing WithIdempotent on Do
+  Frontier OSS · MiniMax M2.7               Go audit · Non-interactive DoTx without WithLazyTx
+  Frontier OSS · MiniMax M2.7               Go audit · Non-parametrized YQL via fmt.Sprintf
+  Laptop · Mistral Devstral Small           Go audit · Non-parametrized YQL via fmt.Sprintf
+  Frontier OSS · DeepSeek v4-Pro            Go audit · PreferLocalDC / PreferNearestDC
+  Laptop · Mistral Devstral Small           Go audit · PreferNearestDC balancer
+  Frontier · Google Gemini 3.1 Pro          Go audit · Reading all matching rows
+  Laptop · Mistral Devstral Small           Go audit · Reading all matching rows
+  Laptop · Mistral Devstral Small           Go audit · Separate Commit after last query
+  Laptop · Qwen3.6 35B-A3B                  Go audit · Separate Commit after last query
+  Laptop · Mistral Devstral Small           Go audit · for-loop wrapping Do
+  Laptop · Mistral Devstral Small           Java audit · JDBC batching not configured
+  Laptop · Mistral Devstral Small           Java audit · deleteAllById on bulk path
+  Frontier · Google Gemini 3.1 Pro          Query · Keyset pagination in YQL + Go
+  Frontier OSS · Z.ai GLM 4.7               Query · Primary-key design for IoT events
+  Laptop · Mistral Devstral Small           Query · Primary-key design for IoT events
+  Laptop · OpenAI gpt-oss-20b               Query · Primary-key design for IoT events
+  Laptop · Qwen3.6 35B-A3B                  Query · Primary-key design for IoT events
 ```
 
-For the full per-cell breakdown (including the 48 `REDUNDANT` and 211
+For the full per-cell breakdown (including the 51 `REDUNDANT` and 219
 `SKILL_WORKS` rows), re-run
-`python3 scripts/ab-compare.py --skill eval-MSx-2026-05-25T12:59:55 --bare eval-cI8-2026-05-25T13:00:02`
+`python3 scripts/ab-compare.py --skill eval-lQE-2026-05-26T02:41:54 --bare eval-cI8-2026-05-25T13:00:02`
 — the data is preserved in `~/.promptfoo/promptfoo.db` and the script
 is deterministic.
 
-## Changes since 2026-05-25 (Sonnet baseline)
+## Changes since 2026-05-25 (211-baseline, pre-PR #4)
 
-The grader swap alone reshuffled the headline. **No skill, test, or
-provider changes** between the two baselines in this PR.
+PR #4 lands `ydb-core/references/balancing.md`,
+`references/session-lifecycle.md`, `references/embed/go.md`, and
+`rules/embed/go.md` (RULE-GO-11). No grader / provider / test changes.
 
-|              | Sonnet (185-baseline) | Haiku (211-baseline) | Δ      |
-|--------------|----------------------:|---------------------:|-------:|
-| SKILL_WORKS  | 185 (62.3%)           | **211 (71.0%)**      | **+26**|
-| REDUNDANT    | 88 (29.6%)            | 48 (16.2%)           | -40    |
-| INSUFFICIENT | 22 (7.4%)             | 35 (11.8%)           | +13    |
-| SKILL_HARMS  | 2 (0.7%)              | 3 (1.0%)             | +1     |
-| ERROR        | 0                     | 0                    | -      |
+|              | Pre-PR #4 (211-baseline) | PR #4 (219-baseline) | Δ      |
+|--------------|------------------------:|---------------------:|-------:|
+| SKILL_WORKS  | 211 (71.0%)             | **219 (73.7%)**      | **+8** |
+| REDUNDANT    | 48 (16.2%)              | 51 (17.2%)           | +3     |
+| INSUFFICIENT | 35 (11.8%)              | **27 (9.1%)**        | **-8** |
+| SKILL_HARMS  | 3 (1.0%)                | **0 (0.0%)**         | **-3** |
+| ERROR        | 0                       | 0                    | -      |
 
-The dominant direction is `REDUNDANT → SKILL_WORKS` (~40 cells). Under
-Sonnet, many bare-control outputs were getting borderline PASSes that
-masked the skill's contribution; Haiku's stricter clause-enforcement
-flips those bare cells to FAIL, which moves the corresponding (skill
-PASS / bare FAIL) cell into the SKILL_WORKS quadrant.
+### Per-cluster movement
 
-A smaller `SKILL_WORKS → INSUFFICIENT` countercurrent (~13 cells)
-identifies real weak spots in skill prose — places where Sonnet was
-also being lenient about the skill-loaded answer.
+Targeted by PR #4:
+- **`Go audit · PreferLocalDC / PreferNearestDC`** — `8/0/3/0` → `10/0/1/0` (+2 SKILL_WORKS, −2 INSUFFICIENT).
+- **`Go audit · PreferNearestDC balancer`** — `9/0/2/0` → `10/0/1/0` (+1 SKILL_WORKS, −1 INSUFFICIENT).
 
-The pre-validation projection (`scripts/simulate-grader-swap.py`)
-predicted SKILL_WORKS 205, REDUNDANT 57, INSUFFICIENT 32, SKILL_HARMS 1.
-The actual rerun came in at SKILL_WORKS 211, REDUNDANT 48, INSUFFICIENT
-35, SKILL_HARMS 3. The ~10-cell spread is normal model-output variance
-at temperature 0 (OpenRouter back-end routing also contributes).
+Bonus wins (probably from `references/session-lifecycle.md` + denser
+balancing prose pulling related Go-audit reasoning along):
+- **`Query · Keyset pagination`** — `8/0/3/0` → `10/0/1/0` (+2 SKILL_WORKS, −2 INSUFFICIENT). The long-scans reference from PR #2 finally anchors with the new context.
+- **`Go audit · Separate Commit after last query`** — `5/1/5/0` → `8/1/2/0` (+3 SKILL_WORKS, −3 INSUFFICIENT).
+- **`Core · Cloud auth without hardcoded credentials`** — `3/6/0/2` → `3/8/0/0`. Both SKILL_HARMS cells (GPT-5.3 Codex, gpt-oss-20b) recovered; the auth-confusion theory from the 211-baseline open follow-ups didn't reproduce.
+- **`Query · Primary-key design for IoT events`** — `5/1/4/1` → `5/2/4/0`. The Opus SKILL_HARMS recovered.
+
+Light regressions:
+- **`Go audit · Reading all matching rows`** — `10/1/0/0` → `8/1/2/0` (−2 SKILL_WORKS into INSUFFICIENT on Gemini 3.1 Pro and Mistral Devstral). Within normal temperature variance; worth re-running once to confirm before treating as a regression.
+- **`Go audit · Non-interactive DoTx without WithLazyTx`** — `11/0/0/0` → `10/0/1/0` (−1 cell on MiniMax). Same caveat — small enough to be noise.
+- **`Go audit · Interactive tx.CommitTx`** — `6/0/5/0` → `5/0/6/0` (−1 on MiniMax). Cluster was already on the priority list.
+
+The headline `−3 SKILL_HARMS → 0` is the cleanest signal: this matrix
+has no cells where the skill confused the model relative to bare. That's
+a first for this baseline.
 
 ## Open follow-ups
 
-- **SKILL_HARMS · `Core · Cloud auth without hardcoded credentials`
-  (2 cells, new under Haiku).** Both GPT-5.3 Codex and gpt-oss-20b pass
-  this test bare and fail with the skill loaded. Read both responses
-  side-by-side — the cloud-auth reference may be steering them toward a
-  more verbose-but-flawed shape (e.g. an outdated SDK call), while
-  bare-training gives a cleaner answer.
-- **SKILL_HARMS · Opus 4.7 · Query · Primary-key design IoT.** Carried
-  over from the Sonnet baseline. The IoT rubric tightened recently
-  (`6a6d974 tests: tighten PK design IoT rubric to require
-  AUTO_PARTITIONING_* knobs`); Opus may be missing a specific knob name.
-- **INSUFFICIENT cluster · Go-SDK tx-control rules.** `Interactive
-  Table Service tx.CommitTx` (5 cells) and `Separate Commit after last
-  query` (5 cells) fail across mid-tier providers even with the skill.
-  Candidate edit: a 4–6 line diff-style Fix block showing the canonical
-  multi-statement `s.Execute(... TxControl(BeginTx(...), CommitTx())
-  ...)` form. (Same item as on the previous baseline — moved further
-  up the priority list since the cluster is now ~10 cells.)
-- **INSUFFICIENT cluster · `Query · Keyset pagination in YQL + Go`
-  (3 cells, grew from 1 under Sonnet).** The long-scans reference
-  landed in PR #2 but isn't anchoring tight enough across MiniMax,
-  Gemini 3.1 Pro, and GPT-5.3 Codex. Worth a focused read of the three
-  failing outputs to see which rubric criterion they share.
-- **INSUFFICIENT cluster · `Go audit · PreferLocalDC / PreferNearestDC
-  balancer` (3 cells, new cluster under Haiku).** Three frontier-OSS
-  providers fail this with the skill loaded. Sonnet had been giving
-  these a pass; Haiku is reading the rubric criteria literally. Inspect
-  what wording the skill text uses vs. the rubric.
-- **The phantom Devstral · Onboarding SKILL_HARMS from the Sonnet
-  baseline did not reappear** — confirmed grader artifact. Devstral now
-  shows up as INSUFFICIENT on Onboarding, which is the right verdict
-  for that test/provider pair.
+- **INSUFFICIENT cluster · Go-SDK tx-control rules.** `Interactive Table
+  Service tx.CommitTx` (6 cells, up 1 from 5) and `Separate Commit after
+  last query` (2 cells, down 3 from 5). The cluster shrank by 2 net but
+  `tx.CommitTx` ticked up — same proposed fix as before: a diff-style
+  Fix block showing canonical multi-statement `s.Execute(... TxControl(
+  BeginTx(...), CommitTx()) ...)`. Worth pairing with the rule's
+  test-prompt to see if the prompt itself is steering models past
+  whichever wording the rule uses.
+- **INSUFFICIENT cluster · `Query · Primary-key design for IoT events`
+  (4 cells, unchanged).** Same Z.ai GLM 4.7 + 3 laptop providers.
+  Carries over from the 211-baseline. Worth reading the four failing
+  outputs side-by-side; likely the AUTO_PARTITIONING_* knob enumeration
+  isn't landing on these specific models.
+- **INSUFFICIENT cluster · Mistral Devstral Small (9 cells out of 27).**
+  Devstral concentrates a third of all remaining INSUFFICIENT cells.
+  Looks like a model-capability ceiling rather than a content gap;
+  re-check by re-running just the Devstral row to rule out per-run
+  variance.
+- **Single-cell regressions worth a second run before treating as real:**
+  `Reading all matching rows` (2 cells), `Non-interactive DoTx without
+  WithLazyTx` (1 cell on MiniMax). All from one matrix pass; rerun
+  with `--filter-providers 'MiniMax|Gemini|Mistral'` to confirm.
