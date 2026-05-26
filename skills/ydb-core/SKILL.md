@@ -1,6 +1,6 @@
 ---
 name: ydb-core
-description: Entry point and router for YDB-related work. Orients an LLM about YDB — what it is, what surfaces it exposes, where to read upstream docs, which specialist skill to load for surface-specific questions. Covers SDK packages, connection strings and auth, local Docker, schema fundamentals, common integrations (ORMs, migration tools, Terraform), client-side balancing, and session lifecycle / resilience under rolling restart. Use when the user asks a general YDB question, mentions YDB without naming a specific surface (queries, topics, coordination), needs setup help, asks about balancing policies or `BAD_SESSION` / `shutdownHint` / rolling restart, or when another YDB skill needs foundational context. Also triggers on `grpcs://` / `grpc://`, `ydb profile`, `ydb scheme`, `balancers.RandomChoice`, `balancers.PreferNearestDC`, `ydb.WithBalancer`, `use_all_nodes`, `TBalancingPolicy`, `SetBalancingPolicy`, `session-balancer`, and "getting started with YDB" prompts.
+description: Entry point and router for YDB-related work. Orients an LLM about YDB — what it is, what surfaces it exposes, where to read upstream docs, which specialist skill to load for surface-specific questions. Covers SDK packages, connection strings and auth, local Docker, schema fundamentals, common integrations (ORMs, migration tools, Terraform), client-side balancing, and session lifecycle / resilience under rolling restart. Use when the user asks a general YDB question, mentions YDB without naming a specific surface (queries, topics, coordination), needs setup help, asks about balancing policies or `BAD_SESSION` / `shutdownHint` / rolling restart, or when another YDB skill needs foundational context. Also triggers on `grpcs://` / `grpc://`, `ydb profile`, `ydb scheme`, `balancers.RandomChoice`, `balancers.PreferNearestDC`, `ydb.WithBalancer`, `session-balancer`, and "getting started with YDB" prompts.
 ---
 
 # YDB Core
@@ -88,15 +88,11 @@ Auth env vars (canonical reference: https://ydb.tech/docs/en/reference/ydb-sdk/a
 
 ## balancing
 
-Random spread across all discovered endpoints is the right default. Per-SDK:
+Random spread across all discovered endpoints is the right default. In Go (`ydb-go-sdk/v3`) this is `balancers.RandomChoice()`, applied when `ydb.Open(...)` carries no `WithBalancer` option.
 
-- **Go** (`ydb-go-sdk/v3`): `balancers.RandomChoice()`, applied when `ydb.Open` carries no `WithBalancer`.
-- **Python** (`ydb`): `use_all_nodes=True` on `ydb.Driver(...)` (default).
-- **C++** (`ydb-cpp-sdk`): `TDriverConfig.SetBalancingPolicy(TBalancingPolicy::UseAllNodes())` — **C++ default is prefer-DC, must opt out explicitly**.
+Prefer-DC variants (Go: `balancers.PreferLocalDC` — marked `// Deprecated` upstream — and `balancers.PreferNearestDC`) concentrate traffic on one DC's nodes. Failure modes: DC-skewed load, drill / rolling-restart stickiness, cross-DC tablet hops defeating the locality goal. Pays off only with followers + `StaleRO`. See `references/balancing.md`.
 
-Prefer-DC variants (`balancers.PreferLocalDC`/`PreferNearestDC`, `use_all_nodes=False`, `UsePreferableLocation()`) concentrate traffic on one DC's nodes. Failure modes: DC-skewed load, drill / rolling-restart stickiness, cross-DC tablet hops defeating the locality goal. Pays off only with followers + `StaleRO`. See `references/balancing.md`.
-
-Sessions are pooled per driver. Application code runs every operation through the pool wrapper (Go: `db.Query().Do(ctx, fn, query.WithIdempotent())`); a `Session` stored in a struct field bypasses the server's `session-balancer` capability and surfaces `BAD_SESSION` during rolling restart. See `references/session-lifecycle.md`.
+Sessions are pooled per driver. Application code runs every operation through the pool wrapper (Go: `db.Query().Do(ctx, fn)`); a `Session` stored in a struct field bypasses the server's `session-balancer` capability and surfaces `BAD_SESSION` during rolling restart. See `references/session-lifecycle.md`.
 
 Audit: driver/session anti-patterns in `rules/embed/go.md`; the prefer-DC balancer and `WithIdempotent` mismatch live in the ydb-table rules file (its triggers fire on Go driver-construction code).
 

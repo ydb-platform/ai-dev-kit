@@ -4,13 +4,11 @@ SDK picks which cluster node receives each gRPC request. Docs: <https://ydb.tech
 
 ## Default: random spread
 
-Pick an endpoint at random per request. Spreads load across every discovered node.
-
-Default in most SDKs. C++ is the exception — defaults to prefer-DC, opt out explicitly. Per-SDK names and defaults: `embed/`.
+Pick an endpoint at random per request. Spreads load across every discovered node. Per-SDK names: `embed/`.
 
 ## Prefer-DC family
 
-Concentrates traffic on one DC's nodes (current DC, nearest DC, or a named DC).
+Concentrates traffic on one DC's nodes (current DC, nearest DC, or a named DC). Per-SDK API names: `embed/`.
 
 Failure modes:
 
