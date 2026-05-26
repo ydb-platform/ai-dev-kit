@@ -55,6 +55,24 @@ _messages: &messages
       ══════════════════════════════════════════════════════════════════════════
       {{ ydb_core }}
 
+      --- ydb-core / references / balancing.md ---
+      {{ ydb_core_refs_balancing }}
+
+      --- ydb-core / references / session-lifecycle.md ---
+      {{ ydb_core_refs_session_lifecycle }}
+
+      --- ydb-core / references / embed / go.md ---
+      {{ ydb_core_refs_go }}
+
+      --- ydb-core / references / embed / python.md ---
+      {{ ydb_core_refs_python }}
+
+      --- ydb-core / references / embed / cpp.md ---
+      {{ ydb_core_refs_cpp }}
+
+      --- ydb-core / rules / embed / go.md ---
+      {{ ydb_core_rules_go }}
+
       ══════════════════════════════════════════════════════════════════════════
       SKILL: ydb-table
       ══════════════════════════════════════════════════════════════════════════
@@ -201,6 +219,12 @@ defaultTest:
   # automatically flows into the prompt on the next eval run.
   vars:
     ydb_core: file://skills/ydb-core/SKILL.md
+    ydb_core_refs_balancing: file://skills/ydb-core/references/balancing.md
+    ydb_core_refs_session_lifecycle: file://skills/ydb-core/references/session-lifecycle.md
+    ydb_core_refs_go: file://skills/ydb-core/references/embed/go.md
+    ydb_core_refs_python: file://skills/ydb-core/references/embed/python.md
+    ydb_core_refs_cpp: file://skills/ydb-core/references/embed/cpp.md
+    ydb_core_rules_go: file://skills/ydb-core/rules/embed/go.md
     ydb_table: file://skills/ydb-table/SKILL.md
     ydb_table_refs_working_with_data: file://skills/ydb-table/references/working-with-data.md
     ydb_table_refs_java: file://skills/ydb-table/references/embed/java.md
