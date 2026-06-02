@@ -1,18 +1,17 @@
-description: Go audit · Stats read before result.Close (RULE-GO-11)
+description: Go audit · Stats consumed before stream drain (RULE-GO-11)
 
 vars:
   user_prompt: |
-    We bill YDB query cost from SDK stats on every transaction commit.
-    This path is flaky in prod — sometimes consumed units are zero.
-    Review the commit helper:
+    We use YDB query stats for diagnostics and adaptive tuning.
+    Sometimes the diagnostics are empty even when the query itself succeeds.
+    Review this helper:
 
     ```go
-    func commitWithBilling(ctx context.Context, tx query.Transaction) (units uint64, err error) {
+    func runAndCollectStats(ctx context.Context, s query.Session) (summary StatsSummary, err error) {
         var stats query.Stats
 
-        res, err := tx.Query(ctx,
-            `select 1`,
-            query.WithCommit(),
+        res, err := s.Query(ctx,
+            `SELECT id, payload FROM events WHERE id > $from LIMIT 100`,
             query.WithStatsMode(query.StatsModeBasic, func(s query.Stats) {
                 stats = s
             }),
@@ -22,7 +21,7 @@ vars:
         }
         defer func() { _ = res.Close(ctx) }()
 
-        return unitsFromStats(stats), nil
+        return summarizeStats(stats), nil
     }
     ```
 
@@ -32,13 +31,15 @@ assert:
       The response should:
       - Cite `RULE-GO-11` by ID.
       - Explain that `ExecuteQuery` is a stream: `WithStatsMode` callbacks
-        can fire on early parts before `ExecStats` with full table-access
-        data arrive; commit `select 1` often sends stats in a later part.
-      - Identify that `unitsFromStats(stats)` runs before `Close` drains
+        can fire on earlier parts while later parts may still contain
+        additional/final stats data.
+      - Explain that control can return to caller code before all stream
+        parts (including stats-bearing ones) are received.
+      - Identify that `summarizeStats(stats)` runs before `Close` drains
         the stream — `defer res.Close` does not run until the function
-        returns, so billing sees empty/partial stats (flaky zeros).
+        returns, so the helper may consume empty/partial stats.
       - Recommend the fix: call `res.Close(ctx)` synchronously (and check
-        its error) before reading `stats` / returning billed units.
+        its error) before reading/returning data derived from `stats`.
 
       Full fail if the response:
       - Treats `defer Close` as sufficient while billing happens before return.
