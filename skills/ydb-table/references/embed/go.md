@@ -43,7 +43,7 @@ Source: <https://github.com/ydb-platform/ydb-go-sdk> README "Example Usage".
 
 `query.WithStatsMode(mode, callback)` attaches a per-query stats handler. The handler may run **more than once** as the SDK receives stream parts. Stats-bearing parts are not guaranteed to arrive first; row data can arrive earlier, and the final stats snapshot may appear only after additional `Recv` calls while draining.
 
-**Rule:** do not consume a `query.Stats` snapshot as final until the `query.Result` is fully drained.
+Do not consume a `query.Stats` snapshot as final until the `query.Result` is fully drained.
 
 - Prefer **`res.Close(ctx)` before reading stats** when there is little or no row iteration.
 - When iterating rows, finish iteration (or call `Close` after) before trusting stats.
@@ -61,7 +61,7 @@ if err := res.Close(ctx); err != nil { return err }
 
 `defer res.Close(ctx)` alone is **not** enough if you read `stats` earlier in the same function — `defer` runs at return, not immediately after `Query`.
 
-Source: `internal/query/result.go` — stats callback in `nextPart`, drain in `Close`. Audit anti-pattern: `RULE-GO-11` in `rules/embed/go.md`.
+Source: `internal/query/result.go` — stats callback in `nextPart`, drain in `Close`.
 
 ## Transactions
 
