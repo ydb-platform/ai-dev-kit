@@ -150,3 +150,46 @@ Same interactive / non-interactive split as RULE-GO-09, applied to the commit si
 For the doubly-wrong case (explicit `tx.CommitTx` inside a `DoTx` closure), also delete the call — `DoTx` handles commit on return-nil.
 
 **Source**: `query.WithCommit() ExecuteOption` — <https://github.com/ydb-platform/ydb-go-sdk/blob/master/query/execute_options.go>; `DoTx` godoc *"If op TxOperation returns nil - transaction will be committed"* — <https://github.com/ydb-platform/ydb-go-sdk/blob/master/query/client.go>. Table Service `options.WithCommit() ExecuteDataQueryOption` — <https://github.com/ydb-platform/ydb-go-sdk/blob/master/table/options/options.go>; canonical multi-statement usage in <https://github.com/ydb-platform/ydb-go-sdk/blob/master/table/example_test.go> (`Example_lazyTransaction`) and <https://github.com/ydb-platform/ydb-go-sdk/blob/master/tests/integration/table_tx_lazy_test.go>.
+
+### RULE-GO-11: Assuming `query.Stats` is final before stream drain
+
+**Severity**: High
+
+**What to look for**: `query.WithStatsMode(...)` (any mode: `StatsModeBasic`, `StatsModeFull`, etc.) on a streaming `Query` / `Exec` / `transaction.Query` call, where the captured `query.Stats` value is consumed as if final (returned, logged, converted, or used in control flow) **before** the corresponding `query.Result` is fully drained.
+
+Concrete signals:
+
+- `s.Query(..., query.WithStatsMode(..., func(s query.Stats) { stats = s }))` followed on the next lines by `return convert(stats)`, `logStats(stats)`, or any decision based on `stats`, with only `defer res.Close(ctx)` later (or no `Close` at all). `defer` runs at function return; it does **not** drain the stream before the lines between `Query` and `return`.
+- Helpers that return a stats-derived value right after `Query` while the result stream is still open.
+- Table Service analogue: reading stats from `result.Result` before `res.Close()` / before full stream drain.
+
+**Problem**: `ExecuteQuery` is a gRPC stream. `WithStatsMode` registers a callback that the SDK may invoke on **each** stream part as parts arrive. Query rows may appear in early parts while stats-bearing parts arrive later. Control returns to caller code before the stream is exhausted, so the captured `query.Stats` snapshot at that moment may be `nil` or partial.
+
+Reading stats immediately after `Query` returns can therefore produce **nil or incomplete** stats even when the server operation succeeded. This causes flaky observability, unstable diagnostics, and incorrect logic when downstream code assumes stats are final.
+
+This is independent of how `Close` is scheduled (`defer` vs direct call): the invariant is that **no consumer should trust stats until stream drain completes**.
+
+**Fix**: drain the result synchronously, then read stats.
+
+```go
+var stats query.Stats
+
+res, err := s.Query(ctx, sql,
+    query.WithStatsMode(query.StatsModeBasic, func(x query.Stats) {
+        stats = x
+    }),
+)
+if err != nil {
+    return err
+}
+if err := res.Close(ctx); err != nil {
+    return err
+}
+// Safe to use stats here.
+```
+
+For reusable helpers, keep a strict shape: run `Query` → drain (`Close` or full iteration) → return/use captured stats. Do not consume stats in the code path between `Query` and drain completion.
+
+If the call also iterates rows, draining by iteration to EOF is valid; stats may be consumed only after that iteration finishes. Calling `Close` after iteration remains a safe finalizer.
+
+**Source**: `ydb-go-sdk/v3` query result stream — stats callback from `internal/query/result.go` `nextPart` when `part.GetExecStats() != nil`; drain loop in `(*streamResult).Close`. Query stats API: <https://github.com/ydb-platform/ydb-go-sdk/blob/master/query/execute_options.go> (`WithStatsMode`).
