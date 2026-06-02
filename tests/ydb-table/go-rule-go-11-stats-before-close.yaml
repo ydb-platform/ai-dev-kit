@@ -1,0 +1,46 @@
+description: Go audit · Stats read before result.Close (RULE-GO-11)
+
+vars:
+  user_prompt: |
+    We bill YDB query cost from SDK stats on every transaction commit.
+    This path is flaky in prod — sometimes consumed units are zero.
+    Review the commit helper:
+
+    ```go
+    func commitWithBilling(ctx context.Context, tx query.Transaction) (units uint64, err error) {
+        var stats query.Stats
+
+        res, err := tx.Query(ctx,
+            `select 1`,
+            query.WithCommit(),
+            query.WithStatsMode(query.StatsModeBasic, func(s query.Stats) {
+                stats = s
+            }),
+        )
+        if err != nil {
+            return 0, err
+        }
+        defer func() { _ = res.Close(ctx) }()
+
+        return unitsFromStats(stats), nil
+    }
+    ```
+
+assert:
+  - type: llm-rubric
+    value: |
+      The response should:
+      - Cite `RULE-GO-11` by ID.
+      - Explain that `ExecuteQuery` is a stream: `WithStatsMode` callbacks
+        can fire on early parts before `ExecStats` with full table-access
+        data arrive; commit `select 1` often sends stats in a later part.
+      - Identify that `unitsFromStats(stats)` runs before `Close` drains
+        the stream — `defer res.Close` does not run until the function
+        returns, so billing sees empty/partial stats (flaky zeros).
+      - Recommend the fix: call `res.Close(ctx)` synchronously (and check
+        its error) before reading `stats` / returning billed units.
+
+      Full fail if the response:
+      - Treats `defer Close` as sufficient while billing happens before return.
+      - Blames only retry/idempotency without mentioning stream drain / stats timing.
+      - Says the pattern is fine because `Query` returned nil error.

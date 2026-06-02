@@ -39,6 +39,30 @@ Three load-bearing pieces:
 
 Source: <https://github.com/ydb-platform/ydb-go-sdk> README "Example Usage".
 
+## Query stats (`WithStatsMode`)
+
+`query.WithStatsMode(mode, callback)` attaches a per-query stats handler. The handler may run **more than once** as the SDK receives stream parts. `ExecStats` (table reads/writes for billing) are not necessarily present in the first part — commit-style queries (`select 1` with `WithCommit()`) often deliver stats only after additional parts, once the stream is drained.
+
+**Rule:** do not bill, metric, or return a `query.Stats` snapshot until the `query.Result` is fully drained.
+
+- Prefer **`res.Close(ctx)` before reading stats** when there is little or no row iteration (typical commit query).
+- When iterating rows, finish iteration (or call `Close` after) before trusting stats for accounting.
+
+```go
+var stats query.Stats
+
+res, err := s.Query(ctx, q,
+    query.WithStatsMode(query.StatsModeBasic, func(s query.Stats) { stats = s }),
+)
+if err != nil { return err }
+if err := res.Close(ctx); err != nil { return err }
+// use stats
+```
+
+`defer res.Close(ctx)` alone is **not** enough if you read `stats` earlier in the same function — `defer` runs at return, not after `Query`.
+
+Source: `internal/query/result.go` — stats callback in `nextPart`, drain in `Close`. Audit anti-pattern: `RULE-GO-11` in `rules/embed/go.md`.
+
 ## Transactions
 
 YDB has two transaction styles, and `ydb-go-sdk/v3` supports both:
