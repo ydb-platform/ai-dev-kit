@@ -75,7 +75,7 @@ npx promptfoo@latest eval --filter-first-n 3
 # combine: one test on one provider
 npx promptfoo@latest eval \
   --filter-pattern 'Cloud auth' \
-  --filter-providers 'anthropic/claude-sonnet-4.6'
+  --filter-providers 'anthropic/claude-haiku-4.5'
 ```
 
 Results are stored in `~/.promptfoo/` and rendered as a matrix: rows = models, columns = test cases, cells = pass/fail + grader reasoning.

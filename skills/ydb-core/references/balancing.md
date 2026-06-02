@@ -4,11 +4,11 @@ SDK picks which cluster node receives each gRPC request. Docs: <https://ydb.tech
 
 ## Default: random spread
 
-Pick an endpoint at random per request. Spreads load across every discovered node. Per-SDK names: `embed/`.
+Pick an endpoint at random per request. Spreads load across every discovered node. Go SDK names: `embed/go.md`.
 
 ## Prefer-DC family
 
-Concentrates traffic on one DC's nodes (current DC, nearest DC, or a named DC). Per-SDK API names: `embed/`.
+Concentrates traffic on one DC's nodes (current DC, nearest DC, or a named DC). Go SDK API names: `embed/go.md`.
 
 Failure modes:
 

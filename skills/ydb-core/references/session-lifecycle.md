@@ -4,7 +4,7 @@
 
 SDK owns sessions. Application borrows per operation via the pool wrapper (`Do`/equivalent), never holds a `Session` field across calls.
 
-Server cap: 1000 concurrent sessions per node. Client-pool upper bound: `1000 × nodes × 2/3 / clients`.
+Each YDB node enforces a concurrent-session cap. Size client pools to stay well under that bound, with headroom for the cross-DC degraded scenario (one DC of N becoming unreachable).
 
 ## `shutdownHint`
 
@@ -28,10 +28,10 @@ No hand-rolled retry loops with fixed sleeps. They replay non-retryable errors, 
 
 Docs: <https://ydb.tech/docs/en/dev/timeouts>. Multiple timeouts (operation, transport, cancel-after); set all.
 
-No deadline propagation available: per-call timeout = `min(caller-deadline, 2-3 × p99_normal)` for that specific query. Tighter fires during stress and amplifies load via retries; looser holds sessions for results no caller wants.
+Per-call timeout sizing: `min(caller-deadline, 2-3 × p99_normal)` for that specific query. Tighter starts firing on requests that would have succeeded under stress (rolling restart, drill entry) and amplifies load via retries; looser keeps in-flight requests alive after the caller stopped caring, holding pool slots.
 
-Upstream provides a deadline: forward it. Request no longer needed: cancel the context — for YDB that closes the session = server-side cancel.
+When the application receives a deadline from upstream, forward it (deadline propagation) instead of using a fixed per-call timeout. When the request is no longer needed, cancel its context — the SDK propagates the cancel to YDB so the server aborts the in-flight gRPC call.
 
 ## Warmup
 
-First call pays session-creation cost. For flat startup latency, fire a few concurrent `SELECT 1` against `/.metadata` at boot to prime the pool across nodes.
+First call pays session-creation cost. For flat startup latency, fire a few concurrent `SELECT 1` queries at boot to prime the pool across nodes.
