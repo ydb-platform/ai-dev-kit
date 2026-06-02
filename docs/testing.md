@@ -8,9 +8,9 @@ The tool is [promptfoo](https://www.promptfoo.dev). One declarative `promptfooco
 
 Every eval runs this shape:
 
-- **System prompt:** the installable skills' content embedded into one system message. `ydb-core` is loaded as a single `SKILL.md`. `ydb-table` is loaded as `SKILL.md` plus its `references/working-with-data.md`, `references/embed/java.md`, `references/embed/go.md`, `rules/embed/java.md`, and `rules/embed/go.md` — i.e. the full body of the skill, as if the agent had read every Load-Sources entry.
+- **System prompt:** the installable skills' content embedded into one system message. `ydb-core` is loaded as `SKILL.md` plus its `references/balancing.md`, `references/session-lifecycle.md`, `references/embed/go.md`, and `rules/embed/go.md`. `ydb-table` is loaded as `SKILL.md` plus its `references/working-with-data.md`, `references/embed/java.md`, `references/embed/go.md`, `rules/embed/java.md`, and `rules/embed/go.md` — i.e. the full body of each skill, as if the agent had read every Load-Sources entry.
 - **User prompt:** supplied by the test case (`tests/<skill>/<case>.yaml`).
-- **Grader:** `claude-sonnet-4.6` judges each `llm-rubric` assertion against a criterion block written in plain English.
+- **Grader:** `anthropic/claude-haiku-4.5` judges each `llm-rubric` assertion against a criterion block written in plain English.
 
 This approximates the *ceiling* per model — every loadable file is fully in context. A model that fails this can't work in a real runtime (Claude Code, Codex, Cursor, etc.) where the agent additionally has to decide which skill to load and which references to read.
 
@@ -75,7 +75,7 @@ npx promptfoo@latest eval --filter-first-n 3
 # combine: one test on one provider
 npx promptfoo@latest eval \
   --filter-pattern 'Cloud auth' \
-  --filter-providers 'anthropic/claude-sonnet-4.6'
+  --filter-providers 'anthropic/claude-haiku-4.5'
 ```
 
 Results are stored in `~/.promptfoo/` and rendered as a matrix: rows = models, columns = test cases, cells = pass/fail + grader reasoning.

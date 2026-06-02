@@ -21,11 +21,13 @@ Content lives in the surface skill whose API it is called on. When a method or c
 
 ## Skill file layout
 
-### `ydb-core` — single file
+### `ydb-core` — primary SKILL.md plus optional driver-level subdirs
 
 ```
 skills/ydb-core/
-  SKILL.md       # flat; no subdirs
+  SKILL.md
+  references/    # OPTIONAL — driver/transport patterns (balancing, sessions)
+  rules/         # OPTIONAL — driver/transport anti-patterns
   evals/evals.json
 ```
 
@@ -36,11 +38,12 @@ The body of `SKILL.md` carries stable section anchors so other skills can deep-l
 - `## surfaces` — router to `ydb-table`, `ydb-topics`, `ydb-coordination`
 - `## packages` — SDK repos, install coordinates, CLI, JDBC
 - `## connecting` — connection strings, auth env vars, CLI profile
+- `## balancing` — pointer to `references/balancing.md` + `references/session-lifecycle.md`
 - `## local-deployment` — Docker / Kubernetes / Ansible
 - `## integrations` — ORMs, migration tools, Terraform, Spark, EF Core
 - `## schema-basics` — LLM failure modes on YDB schemas with concrete fixes
 
-Progressive disclosure is intentionally off for `ydb-core`: everything it says must be in context whenever it triggers. Body budget: ≤500 lines (upstream's recommended cap).
+Progressive disclosure is intentionally off for `ydb-core` itself: the SKILL.md body must remain in context whenever the skill triggers (body budget: ≤500 lines). The optional `references/` and `rules/` subdirs are loaded on demand the same way they are in surface skills, and they exist for driver/transport patterns whose surface is `ydb.Open(...)` rather than any one application API — balancing, session lifecycle, retry. Application-layer rules (query execution, transactions, schema) stay in the relevant surface skill (`ydb-table`, etc.); cross-link only from `references/`, not `rules/`.
 
 ### Surface skills — split by authoring vs audit
 

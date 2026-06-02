@@ -1,6 +1,6 @@
 ---
 name: ydb-core
-description: Entry point and router for YDB-related work. Orients an LLM about YDB — what it is, what surfaces it exposes, where to read upstream docs, which specialist skill to load for surface-specific questions. Covers SDK packages, connection strings and auth, local Docker, schema fundamentals, and common integrations (ORMs, migration tools, Terraform). Use when the user asks a general YDB question, mentions YDB without naming a specific surface (queries, topics, coordination), needs setup help, or when another YDB skill needs foundational context. Also triggers on `grpcs://` / `grpc://`, `ydb profile`, `ydb scheme`, and "getting started with YDB" prompts.
+description: Entry point and router for YDB-related work. Orients an LLM about YDB — what it is, what surfaces it exposes, where to read upstream docs, which specialist skill to load for surface-specific questions. Covers SDK packages, connection strings and auth, local Docker, schema fundamentals, common integrations (ORMs, migration tools, Terraform), client-side balancing, and session lifecycle / resilience under rolling restart. Use when the user asks a general YDB question, mentions YDB without naming a specific surface (queries, topics, coordination), needs setup help, asks about balancing policies or `BAD_SESSION` / `shutdownHint` / rolling restart, or when another YDB skill needs foundational context. Also triggers on `grpcs://` / `grpc://`, `ydb profile`, `ydb scheme`, `balancers.RandomChoice`, `balancers.PreferNearestDC`, `ydb.WithBalancer`, `session-balancer`, and "getting started with YDB" prompts.
 ---
 
 # YDB Core
@@ -85,6 +85,10 @@ Auth env vars (canonical reference: https://ydb.tech/docs/en/reference/ydb-sdk/a
 - `YDB_OAUTH2_KEY_FILE` — OAuth2 key file.
 - `YDB_STATIC_CREDENTIALS_USER` + `YDB_STATIC_CREDENTIALS_PASSWORD` + `YDB_STATIC_CREDENTIALS_ENDPOINT` — static user/password auth.
 - `YDB_ANONYMOUS_CREDENTIALS` — local Docker only. Value semantics differ per SDK; check the auth doc.
+
+## balancing
+
+Client-side balancer defaults, session lifecycle, `shutdownHint` / `BAD_SESSION` behaviour under rolling restart: `references/balancing.md`, `references/session-lifecycle.md`.
 
 ## local-deployment
 

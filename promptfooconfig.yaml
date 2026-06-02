@@ -55,6 +55,18 @@ _messages: &messages
       ══════════════════════════════════════════════════════════════════════════
       {{ ydb_core }}
 
+      --- ydb-core / references / balancing.md ---
+      {{ ydb_core_refs_balancing }}
+
+      --- ydb-core / references / session-lifecycle.md ---
+      {{ ydb_core_refs_session_lifecycle }}
+
+      --- ydb-core / references / embed / go.md ---
+      {{ ydb_core_refs_go }}
+
+      --- ydb-core / rules / embed / go.md ---
+      {{ ydb_core_rules_go }}
+
       ══════════════════════════════════════════════════════════════════════════
       SKILL: ydb-table
       ══════════════════════════════════════════════════════════════════════════
@@ -168,12 +180,12 @@ providers:
         # reasoning budget and the visible answer comes back empty or
         # truncated. 8192 matches the budget given to Qwen3.6 35B-A3B.
         max_tokens: 8192
-  - id: https:mistralai/devstral-small
-    label: Laptop · Mistral Devstral Small
+  - id: https:mistralai/mistral-small-2603
+    label: Laptop · Mistral Small 2603
     config:
       <<: *http
       body:
-        model: "mistralai/devstral-small"
+        model: "mistralai/mistral-small-2603"
         messages: *messages
         temperature: 0.2
         max_tokens: 2048
@@ -201,6 +213,10 @@ defaultTest:
   # automatically flows into the prompt on the next eval run.
   vars:
     ydb_core: file://skills/ydb-core/SKILL.md
+    ydb_core_refs_balancing: file://skills/ydb-core/references/balancing.md
+    ydb_core_refs_session_lifecycle: file://skills/ydb-core/references/session-lifecycle.md
+    ydb_core_refs_go: file://skills/ydb-core/references/embed/go.md
+    ydb_core_rules_go: file://skills/ydb-core/rules/embed/go.md
     ydb_table: file://skills/ydb-table/SKILL.md
     ydb_table_refs_working_with_data: file://skills/ydb-table/references/working-with-data.md
     ydb_table_refs_java: file://skills/ydb-table/references/embed/java.md
