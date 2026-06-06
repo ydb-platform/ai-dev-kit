@@ -9,15 +9,6 @@ set -euo pipefail
 REPO_URL="https://github.com/ydb-platform/ai-dev-kit"
 VERSION="0.3.0"
 
-# ── Colors ──────────────────────────────────────────────────────────────────
-
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-BOLD='\033[1m'
-NC='\033[0m'
-
 # ── Skills list ─────────────────────────────────────────────────────────────
 
 SKILLS=(ydb-core ydb-table)
@@ -49,12 +40,12 @@ AGENTS=(
 
 usage() {
   cat <<EOF
-${BOLD}YDB Skills Installer v${VERSION}${NC}
+YDB Skills Installer v${VERSION}
 
-${BOLD}Usage:${NC}
+Usage:
   $(basename "$0") [options]
 
-${BOLD}Options:${NC}
+Options:
   --agent=NAME[,NAME]   Install for specific agent(s). Comma-separated.
                          Agents: claude, cursor, windsurf, copilot, codex,
                                  roo, gemini, amp, kiro, trae, generic
@@ -73,7 +64,7 @@ ${BOLD}Options:${NC}
   --uninstall           Remove installed skills
   -h, --help            Show this help
 
-${BOLD}Examples:${NC}
+Examples:
   # Auto-detect agents and install to current project
   $(basename "$0") --detect
 
@@ -100,10 +91,10 @@ EOF
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
-log_info()  { echo -e "${BLUE}ℹ${NC} $*"; }
-log_ok()    { echo -e "${GREEN}✓${NC} $*"; }
-log_warn()  { echo -e "${YELLOW}⚠${NC} $*"; }
-log_err()   { echo -e "${RED}✗${NC} $*" >&2; }
+log_info()  { echo "info: $*"; }
+log_ok()    { echo "ok: $*"; }
+log_warn()  { echo "warn: $*"; }
+log_err()   { echo "error: $*" >&2; }
 
 get_agent_field() {
   local agent="$1" field="$2"
@@ -342,7 +333,7 @@ main() {
   # ── List mode ───────────────────────────────────────────────────────────
 
   if [[ "$do_list" == true ]]; then
-    echo -e "${BOLD}Supported agents:${NC}"
+    echo "Supported agents:"
     echo ""
     printf "  %-12s %-25s %s\n" "AGENT" "PROJECT DIR" "GLOBAL DIR"
     printf "  %-12s %-25s %s\n" "─────" "───────────" "──────────"
@@ -351,8 +342,8 @@ main() {
       printf "  %-12s %-25s %s\n" "$name" "$proj" "${glob:-(none)}"
     done
     echo ""
-    echo -e "${BOLD}Available skills:${NC} ${SKILLS[*]}"
-    echo -e "${BOLD}Baseline skill (auto-included):${NC} ${DEFAULT_CO_SKILL}"
+    echo "Available skills: ${SKILLS[*]}"
+    echo "Baseline skill (auto-included): ${DEFAULT_CO_SKILL}"
     exit 0
   fi
 
@@ -442,11 +433,11 @@ main() {
   [[ "$do_uninstall" == true ]] && action="Uninstalling"
   [[ "$dry_run" == true ]] && action="${action} (dry run)"
 
-  echo -e "${BOLD}${action} YDB skills${NC}"
-  echo -e "  Skills:  ${install_skills[*]}"
-  echo -e "  Agents:  ${target_agents[*]}"
-  echo -e "  Scope:   $(if $use_global; then echo "global (user)"; else echo "project (${project_dir})"; fi)"
-  echo -e "  Method:  ${method}"
+  echo "${action} YDB skills"
+  echo "  Skills:  ${install_skills[*]}"
+  echo "  Agents:  ${target_agents[*]}"
+  echo "  Scope:   $(if $use_global; then echo "global (user)"; else echo "project (${project_dir})"; fi)"
+  echo "  Method:  ${method}"
   echo ""
 
   local installed_count=0
@@ -467,7 +458,7 @@ main() {
       target_base="${project_dir}/${rel_dir}"
     fi
 
-    echo -e "${BOLD}${agent}${NC} → ${target_base}"
+    echo "${agent} -> ${target_base}"
 
     for skill in "${install_skills[@]}"; do
       if [[ "$do_uninstall" == true ]]; then
