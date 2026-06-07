@@ -1,4 +1,4 @@
-# YDB Skills
+# YDB AI Skills
 
 AI coding agent skills for [YDB](https://ydb.tech) — for writing YQL, designing schemas, and reviewing Java application code against YDB. Skills auto-trigger based on context.
 
