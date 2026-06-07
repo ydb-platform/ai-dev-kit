@@ -16,8 +16,8 @@ AI coding agent skills for [YDB](https://ydb.tech) — for writing YQL, designin
 ### Local install (from cloned repo)
 
 ```bash
-git clone https://github.com/ydb-platform/ai-dev-kit.git
-cd ai-dev-kit
+git clone https://github.com/ydb-platform/ydb-ai-skills.git
+cd ydb-ai-skills
 
 # Auto-detect agents in current project
 ./install.sh --detect

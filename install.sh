@@ -6,7 +6,7 @@ set -euo pipefail
 # AI coding agents. Supports: Claude Code, Cursor, Windsurf, GitHub Copilot,
 # Codex CLI, Roo Code, Gemini CLI, Amp, Kiro, Trae, and generic .agents/.
 
-REPO_URL="https://github.com/ydb-platform/ai-dev-kit"
+REPO_URL="https://github.com/ydb-platform/ydb-ai-skills"
 VERSION="0.3.0"
 
 # ── Skills list ─────────────────────────────────────────────────────────────

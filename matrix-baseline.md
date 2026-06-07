@@ -1,7 +1,7 @@
 # Matrix baseline — 2026-06-02 (Haiku grader, PR #4 final state)
 
 Snapshot of the A/B compatibility matrix on the final pre-merge state of
-ai-dev-kit#4 (`ydb-core` balancing references + `RULE-GO-11` + bot-review
+ydb-ai-skills#4 (`ydb-core` balancing references + `RULE-GO-11` + bot-review
 fixes). Future edits to skills should be compared against this — a
 meaningful change should move cells from `REDUNDANT` / `INSUFFICIENT`
 toward `SKILL_WORKS` without regressing `SKILL_WORKS` cells.

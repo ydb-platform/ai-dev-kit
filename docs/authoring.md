@@ -1,6 +1,6 @@
 # Authoring skills for this repo
 
-This file documents the conventions unique to `ydb-platform/ai-dev-kit`. General-purpose skill authoring guidance lives upstream at [`anthropics/skills/skills/skill-creator/SKILL.md`](https://github.com/anthropics/skills/blob/main/skills/skill-creator/SKILL.md) — read that first, then apply the rules below on top.
+This file documents the conventions unique to `ydb-platform/ydb-ai-skills`. General-purpose skill authoring guidance lives upstream at [`anthropics/skills/skills/skill-creator/SKILL.md`](https://github.com/anthropics/skills/blob/main/skills/skill-creator/SKILL.md) — read that first, then apply the rules below on top.
 
 ## Taxonomy
 

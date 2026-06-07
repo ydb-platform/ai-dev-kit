@@ -1,4 +1,4 @@
-name = "ydb-ai-dev-kit"
+name = "ydb-ydb-ai-skills"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 
@@ -8,7 +8,7 @@ globs = ["**/*.html"]
 fallthrough = false
 
 [vars]
-GITHUB_REPO = "ydb-platform/ai-dev-kit"
+GITHUB_REPO = "ydb-platform/ydb-ai-skills"
 
 [[routes]]
 pattern = "ai.ydb.sh"
