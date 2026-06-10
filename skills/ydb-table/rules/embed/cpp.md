@@ -16,7 +16,7 @@ Audit rules for application code talking to YDB through the C++ SDK. Each rule i
 - **Keyset-paginate**: wrap the call in an outer loop with a cursor predicate and `ORDER BY` over the table's primary key; terminate when a page returns zero rows. The loop continuation is driven by rows / cursor, not by retry status — see RULE-CPP-04.
 - **Table scan stream**: use `StreamExecuteScanQuery` when staying on the Table client.
 
-**Source**: `ydb-platform/ydb-cpp-sdk` — `TResultSet::Truncated()` in <https://github.com/ydb-platform/ydb-cpp-sdk/blob/main/include/ydb-cpp-sdk/client/result/result.h> (backed by `Ydb::ResultSet::truncated()` in <https://github.com/ydb-platform/ydb-cpp-sdk/blob/main/src/client/result/result.cpp>).
+**Source**: YDB docs — paging guide at <https://ydb.tech/docs/en/dev/paging> (keyset pagination over the primary key, the canonical strategy). The `TResultSet::Truncated()` flag the rule keys on is part of the public C++ API in `include/ydb-cpp-sdk/client/result/result.h`.
 
 ### RULE-CPP-02: External state mutation from inside the retry lambda
 
@@ -28,7 +28,7 @@ Audit rules for application code talking to YDB through the C++ SDK. Each rule i
 
 **Fix**: build the result inside the lambda as a per-attempt local; assign to the outer variable only on the path that returns a successful `TStatus`. The lambda owns all data processing; only the success decision crosses the boundary.
 
-**Source**: `ydb-platform/ydb-cpp-sdk` — retry loop in <https://github.com/ydb-platform/ydb-cpp-sdk/blob/main/src/client/query/client.cpp> (`RetryQuerySync`); session-pool retry in <https://github.com/ydb-platform/ydb-cpp-sdk/blob/main/src/client/impl/internal/retry/retry_sync.h>.
+**Source**: YDB docs — retry recipe at <https://ydb.tech/docs/en/recipes/ydb-sdk/retry> (the SDK retries the user-supplied lambda as the unit of work); error-handling guidance at <https://ydb.tech/docs/en/reference/ydb-sdk/error_handling>. The C++ retrier that drives the replay is `RetryQuerySync` in `include/ydb-cpp-sdk/client/query/client.h`.
 
 ### RULE-CPP-03: Missing `.Idempotent(true)` on `RetryQuerySync` / `RetryOperationSync`
 
@@ -39,11 +39,11 @@ Audit rules for application code talking to YDB through the C++ SDK. Each rule i
 - **Missing flag on safe-to-replay work**: `RetryQuerySync` / `RetryOperationSync` whose lambda body is replay-safe (a read; an `UPSERT` keyed on a value the caller already has; a write guarded by an idempotency key) but no `NYdb::NRetry::TRetryOperationSettings().Idempotent(true)` passed as the settings argument. Fix: add `.Idempotent(true)`.
 - **Flag set on non-idempotent work**: retry call carrying `.Idempotent(true)` while the lambda performs a non-idempotent write (counter increment, money transfer, raw `INSERT` of a generated row). Fix: remove the flag *and* rework the write to be idempotent before opting back in.
 
-**Problem**: `GetNextStep` in the SDK retry context classifies `UNDETERMINED` and `TRANSPORT_UNAVAILABLE` as retryable only when `Settings_.Idempotent_` is true. These are transport-class failures where the server may have already committed the write before the client saw the failure. The SDK cannot infer idempotency from the API surface — only the developer knows. Setting the flag on a non-idempotent write causes double effect; omitting it on an idempotent write makes the program propagate errors it could have absorbed.
+**Problem**: per the YDB docs, `UNDETERMINED` is conditionally retryable — "only idempotent operations can be fixed with a retry." These are failures where the server may have already committed the write before the client saw the failure. The SDK cannot infer idempotency from the API surface — only the developer knows. Setting the flag on a non-idempotent write causes double effect on retry; omitting it on an idempotent write makes the program propagate errors it could have absorbed.
 
 **Fix**: pass `NYdb::NRetry::TRetryOperationSettings().Idempotent(true)` (or `NYdb::NTable::TRetryOperationSettings().Idempotent(true)`) when the inner work is idempotent. For non-idempotent writes, do not set the flag; make the write idempotent first (client-generated request id, dedup guard) before opting in.
 
-**Source**: `ydb-platform/ydb-cpp-sdk` — `GetNextStep` in <https://github.com/ydb-platform/ydb-cpp-sdk/blob/main/src/client/impl/internal/retry/retry.h> (`UNDETERMINED`, `TRANSPORT_UNAVAILABLE` branches).
+**Source**: YDB docs — status-code retry table at <https://ydb.tech/docs/en/reference/ydb-sdk/ydb-status-codes> (UNDETERMINED is conditionally retryable for idempotent operations only; PRECONDITION_FAILED non-retryable); retry recipe at <https://ydb.tech/docs/en/recipes/ydb-sdk/retry> ("Idempotent operations are retried for a broader range of errors"); error-handling guidance at <https://ydb.tech/docs/en/reference/ydb-sdk/error_handling> ("Only idempotent operations can be fixed with a retry").
 
 ### RULE-CPP-04: `for` loop wrapping `RetryQuerySync` / `RetryOperationSync` for retry purposes
 
@@ -53,11 +53,11 @@ Audit rules for application code talking to YDB through the C++ SDK. Each rule i
 
 **Not a target**: a keyset-pagination outer loop whose continuation depends on rows returned, a cursor advancing, or an `EOS` flag — even though it also wraps `RetryQuerySync` (see RULE-CPP-01 fix). The signal is what drives the next iteration, not the loop syntax.
 
-**Problem**: `RetryQuerySync` / `RetryOperationSync` already retry the lambda internally with classified backoff (`retry.h` `GetNextStep`). A status-driven outer loop multiplies the backoff schedule, re-runs work on non-retryable errors the SDK has correctly decided not to retry, and silently inflates the retry budget the caller thinks they configured.
+**Problem**: `RetryQuerySync` / `RetryOperationSync` already retry the lambda internally with status-classified backoff. A status-driven outer loop multiplies the backoff schedule, re-runs work on non-retryable errors the SDK has correctly decided not to retry, and silently inflates the retry budget the caller thinks they configured. The YDB error-handling guide is explicit: "Do not use endless retries" and "do not repeat instant retries more than once."
 
-**Fix**: remove the outer status-driven loop. Express tuning through `TRetryOperationSettings` (`MaxRetries`, backoff settings), not by wrapping the SDK retrier.
+**Fix**: remove the outer status-driven loop. Express tuning through `TRetryOperationSettings` (`MaxRetries`, `MaxTimeout`, `FastBackoffSettings`, `SlowBackoffSettings`), not by wrapping the SDK retrier.
 
-**Source**: `ydb-platform/ydb-cpp-sdk` — <https://github.com/ydb-platform/ydb-cpp-sdk/blob/main/src/client/query/client.cpp> (`RetryQuerySync` implementation); classification in <https://github.com/ydb-platform/ydb-cpp-sdk/blob/main/src/client/impl/internal/retry/retry.h> (`GetNextStep`).
+**Source**: YDB docs — retry recipe at <https://ydb.tech/docs/en/recipes/ydb-sdk/retry> (the SDK provides the retrier; C++ `TRetryOperationSettings` knobs are listed there: `MaxRetries`, `MaxTimeout`, `FastBackoffSettings`, `SlowBackoffSettings`, `RetryNotFound`); excess-retry guidance at <https://ydb.tech/docs/en/reference/ydb-sdk/error_handling>.
 
 ### RULE-CPP-05: Custom retrier with `Sleep` wrapping YDB calls
 
@@ -65,11 +65,11 @@ Audit rules for application code talking to YDB through the C++ SDK. Each rule i
 
 **What to look for**: `for` loop with explicit `Sleep` / `std::this_thread::sleep_for` / manual backoff between attempts, calling any YDB-facing method inside — `session.ExecuteQuery`, `session.ExecuteDataQuery`, `client.GetSession`, `BulkUpsert`, or arbitrary helpers that call into the SDK.
 
-**Problem**: a hand-rolled retrier replays every non-success `TStatus` indiscriminately. Non-retryable failures (`PRECONDITION_FAILED`, schema mismatch) burn the retry budget on errors that will never recover, and conditionally-retryable failures (`UNDETERMINED`, `TRANSPORT_UNAVAILABLE`) get retried with no idempotency gate — which can double-apply a non-idempotent write. The SDK retrier classifies via `GetNextStep` and only retries the conditional bucket when `.Idempotent(true)` is set; backoff with jitter comes from `FastBackoffSettings` / `SlowBackoffSettings`.
+**Problem**: a hand-rolled retrier replays every non-success `TStatus` indiscriminately. Non-retryable failures (`PRECONDITION_FAILED`, `SCHEME_ERROR`, `BAD_REQUEST`) burn the retry budget on errors that will never recover; conditionally-retryable failures (`UNDETERMINED`) get retried with no idempotency gate, which can double-apply a non-idempotent write. The YDB docs are explicit that the SDK ships a built-in retry mechanism for exactly this reason and that idempotency must be opted into per call.
 
-**Fix**: delete the custom loop and use `RetryQuerySync` / `RetryOperationSync`; express tuning through `TRetryOperationSettings` rather than caller-side `for`/`Sleep` code.
+**Fix**: delete the custom loop and use `RetryQuerySync` / `RetryOperationSync`; express tuning through `TRetryOperationSettings` rather than caller-side `for` / `Sleep` code.
 
-**Source**: `ydb-platform/ydb-cpp-sdk` — <https://github.com/ydb-platform/ydb-cpp-sdk/blob/main/src/client/impl/internal/retry/retry.h>; <https://github.com/ydb-platform/ydb-cpp-sdk/blob/main/include/ydb-cpp-sdk/client/retry/retry.h>.
+**Source**: YDB docs — retry recipe at <https://ydb.tech/docs/en/recipes/ydb-sdk/retry> ("YDB SDKs provide built-in tools for retries"); status-code classification at <https://ydb.tech/docs/en/reference/ydb-sdk/ydb-status-codes>; error-handling guidance at <https://ydb.tech/docs/en/reference/ydb-sdk/error_handling>.
 
 ### RULE-CPP-06: `NYdb::TDriver` constructed per request instead of once per process
 
@@ -79,9 +79,9 @@ Audit rules for application code talking to YDB through the C++ SDK. Each rule i
 
 **Problem**: `TDriver` owns the gRPC channel pool, endpoint-discovery state, and background worker threads. Constructing one per request pays full endpoint discovery, gRPC channel setup, and TLS handshake before every YDB call, then tears the state back down — a latency cliff under any non-trivial RPS and a connection-churn signal at the cluster. Failing to call `driver.Stop(true)` on the short-lived driver also leaks the background threads.
 
-**Fix**: hold a single `NYdb::TDriver` for the process lifetime (build it at startup, stop it at shutdown via `driver.Stop(true)`); pass it to surface clients (`TQueryClient`, `TTableClient`) which are cheap to construct on demand. The upstream `basic_example` does exactly this in `main.cpp`.
+**Fix**: hold a single `NYdb::TDriver` for the process lifetime (build it at startup, stop it at shutdown via `driver.Stop(true)`); pass it to surface clients (`TQueryClient`, `TTableClient`) which are cheap to construct on demand.
 
-**Source**: `ydb-platform/ydb-cpp-sdk` — `TDriver` lifecycle in <https://github.com/ydb-platform/ydb-cpp-sdk/blob/main/include/ydb-cpp-sdk/client/driver/driver.h>; one-driver-per-process pattern in <https://github.com/ydb-platform/ydb-cpp-sdk/blob/main/examples/basic_example/main.cpp> (driver constructed at `main` and `Stop(true)` on exit).
+**Source**: YDB docs — SDK initialization recipe at <https://ydb.tech/docs/en/recipes/ydb-sdk/init> (the canonical shape: one driver constructed at startup, deferred close at shutdown, clients built on top). `TDriver` lifecycle surface in `include/ydb-cpp-sdk/client/driver/driver.h` of `ydb-platform/ydb-cpp-sdk`.
 
 ### RULE-CPP-07: Non-parametrized YQL — `std::format` / string concat into query text
 
@@ -93,7 +93,7 @@ Audit rules for application code talking to YDB through the C++ SDK. Each rule i
 
 **Fix**: bind values through `TParamsBuilder().AddParam("$name").<Type>(value).Build()` and pass the resulting `TParams` to `ExecuteQuery` / `ExecuteDataQuery`. A `DECLARE` block in the query body is optional for scalars — types are inferred from bound values — and is justified for compound shapes (`List<Struct<...>>`).
 
-**Source**: `ydb-platform/ydb-cpp-sdk` — `TParamsBuilder` in <https://github.com/ydb-platform/ydb-cpp-sdk/blob/main/include/ydb-cpp-sdk/client/params/params.h>. YQL parameters: <https://ydb.tech/docs/en/yql/reference/syntax/declare>.
+**Source**: YDB docs — parameterized queries guide at <https://ydb.tech/docs/en/reference/ydb-sdk/parameterized_queries> ("saves from vulnerabilities like SQL Injection" and "cache the query plan for parameterized requests"); YQL `DECLARE` syntax at <https://ydb.tech/docs/en/yql/reference/syntax/declare>. C++ binding surface is `TParamsBuilder` in `include/ydb-cpp-sdk/client/params/params.h`.
 
 ### RULE-CPP-08: Explicit `BeginTransaction` + `Commit` when fused `TTxControl` suffices
 
@@ -101,11 +101,11 @@ Audit rules for application code talking to YDB through the C++ SDK. Each rule i
 
 **What to look for**: `session.BeginTransaction(...)` followed by one `ExecuteQuery` / `ExecuteDataQuery` and `tx.Commit()` for **single-statement** work where `TTxControl::BeginTx(...).CommitTx()` on the query call would fuse begin, execute, and commit into fewer round trips. Multi-step flows that genuinely need client logic between statements (as in `MultiStep` in the basic example) are not the target.
 
-**Problem**: separate begin and commit RPCs add latency and session churn. The upstream basic example documents that inline `TTxControl` on `ExecuteQuery` is preferable in most cases because it avoids additional hops to the cluster.
+**Problem**: separate begin and commit RPCs add latency and session churn. Per the YDB transactions guide, "if the transaction body is fully formed before accessing the database, it will be processed more efficiently" — fused `TTxControl::BeginTx(...).CommitTx()` lets the server execute the statement and commit in a single round trip; the explicit `BeginTransaction` / `Commit()` split forces two extra hops with no semantic gain for a single statement.
 
 **Fix**: for single-statement transactions, pass `TTxControl::BeginTx(TTxSettings::SerializableRW()).CommitTx()` as the second argument to `ExecuteQuery` / `ExecuteDataQuery` instead of explicit `BeginTransaction` + `Commit()`.
 
-**Source**: `ydb-platform/ydb-cpp-sdk` — `ExplicitTcl` comment in <https://github.com/ydb-platform/ydb-cpp-sdk/blob/main/examples/basic_example/basic_example.cpp> (lines 354–357).
+**Source**: YDB docs — transactions guide at <https://ydb.tech/docs/en/concepts/transactions> ("if the transaction body is fully formed before accessing the database, it will be processed more efficiently"). C++ `TTxControl` API in `include/ydb-cpp-sdk/client/query/tx.h` of `ydb-platform/ydb-cpp-sdk`.
 
 ### RULE-CPP-09: `StreamExecuteQuery` consumer assumes exactly-once rows
 
@@ -113,11 +113,11 @@ Audit rules for application code talking to YDB through the C++ SDK. Each rule i
 
 **What to look for**: `StreamExecuteQuery` / `TExecuteQueryIterator::ReadNext` loop that processes rows with no deduplication strategy, no idempotent sink, and no comment acknowledging retry-induced duplicates — especially when the stream call sits inside or under `RetryQuerySync`.
 
-**Problem**:  duplicate lines in the output stream are possible due to the external retryer. A consumer that counts rows, bills per row, or appends to an external queue without dedupe will double-count on replay.
+**Problem**: the SDK retrier replays the user-supplied lambda as a whole on retryable errors; a stream that already emitted N rows before the failure will, on the next attempt, emit those rows again before reaching new ones. A consumer that counts rows, bills per row, or appends to an external queue without dedupe will double-count on replay.
 
 **Fix**: design the sink to be idempotent (keyed UPSERT, dedup by primary key), or track the last-seen cursor and skip duplicates. Do not assume one physical row per logical row in a retried stream.
 
-**Source**: `ydb-platform/ydb-cpp-sdk` — comment in `StreamQuerySelect` in <https://github.com/ydb-platform/ydb-cpp-sdk/blob/main/examples/basic_example/basic_example.cpp> (line 443).
+**Source**: YDB docs — retry recipe at <https://ydb.tech/docs/en/recipes/ydb-sdk/retry> (the SDK retries the lambda as the unit of work, so partial side effects from a failed attempt are observable again on the next); error-handling guidance at <https://ydb.tech/docs/en/reference/ydb-sdk/error_handling>.
 
 ### RULE-CPP-10: `INSERT INTO` inside a retry lambda with `.Idempotent(true)`
 
@@ -129,7 +129,7 @@ Audit rules for application code talking to YDB through the C++ SDK. Each rule i
 
 **Fix**: pick one — (a) switch the statement to `UPSERT INTO` (replay-safe by construction; converges to the same final state), (b) keep `INSERT INTO` and drop `.Idempotent(true)` so the SDK propagates `UNDETERMINED` instead of replaying, or (c) wrap the INSERT in a server-side idempotency guard (existence check + INSERT in one transaction, or a dedup table keyed on a client-generated request id) before opting back into `.Idempotent(true)`.
 
-**Source**: `ydb-platform/ydb-cpp-sdk` — `PRECONDITION_FAILED` in <https://github.com/ydb-platform/ydb-cpp-sdk/blob/main/include/ydb-cpp-sdk/client/types/status_codes.h>; idempotent-gated retry of `UNDETERMINED` / `TRANSPORT_UNAVAILABLE` in <https://github.com/ydb-platform/ydb-cpp-sdk/blob/main/src/client/impl/internal/retry/retry.h> (`GetNextStep`). YQL `INSERT` semantics: <https://ydb.tech/docs/en/yql/reference/syntax/insert_into> (the page documents the `PRECONDITION_FAILED` / `insert_pk` failure on duplicate primary key).
+**Source**: YDB docs — status-code retry table at <https://ydb.tech/docs/en/reference/ydb-sdk/ydb-status-codes> (UNDETERMINED conditionally retryable for idempotent operations; PRECONDITION_FAILED non-retryable); YQL `INSERT` semantics at <https://ydb.tech/docs/en/yql/reference/syntax/insert_into> (duplicate primary key surfaces as `PRECONDITION_FAILED` / `insert_pk`); error-handling guidance at <https://ydb.tech/docs/en/reference/ydb-sdk/error_handling> ("Only idempotent operations can be fixed with a retry").
 
 ### RULE-CPP-11: DDL (`ExecuteSchemeQuery` / `CreateTable`) executed inside a `RetryQuerySync` / `RetryOperationSync` lambda
 
@@ -141,4 +141,4 @@ Audit rules for application code talking to YDB through the C++ SDK. Each rule i
 
 **Fix**: run schema-creation / migration steps in dedicated, idempotent setup code outside the SDK retrier — typically a startup-time bootstrap that uses `ExecuteSchemeQuery` directly and reasons about its own failure mode. Keep `RetryQuerySync` / `RetryOperationSync` lambdas DML-only. If runtime-issued DDL is unavoidable, give it its own bounded retry strategy rather than reusing the query-retry classifier.
 
-**Source**: `ydb-platform/ydb-cpp-sdk` — `ExecuteSchemeQuery` in <https://github.com/ydb-platform/ydb-cpp-sdk/blob/main/include/ydb-cpp-sdk/client/table/table.h>; `CreateTable` in the same header; query-classifier assumptions in <https://github.com/ydb-platform/ydb-cpp-sdk/blob/main/src/client/impl/internal/retry/retry.h> (`GetNextStep`).
+**Source**: YDB docs — error-handling guidance at <https://ydb.tech/docs/en/reference/ydb-sdk/error_handling> and retry recipe at <https://ydb.tech/docs/en/recipes/ydb-sdk/retry> (both frame the SDK retrier around DML status codes and transaction semantics, not schema-change semantics); status-code classification at <https://ydb.tech/docs/en/reference/ydb-sdk/ydb-status-codes>. C++ DDL surface (`ExecuteSchemeQuery`, `CreateTable`) is declared in `include/ydb-cpp-sdk/client/table/table.h` of `ydb-platform/ydb-cpp-sdk`.
