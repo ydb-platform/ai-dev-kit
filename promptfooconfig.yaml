@@ -4,14 +4,14 @@
 # loaded into a coding-agent-style system prompt. Identifies the minimum
 # model per vendor family that still passes most tests.
 #
-# Usage:
-#   export OPENROUTER_API_KEY="..."
+# Usage (OpenRouter):
+#   export OPENROUTER_API_KEY="sk-or-..."
 #   npx promptfoo@latest eval
-#   npx promptfoo@latest view
 #
-# Every model is accessed through public OpenRouter via the generic `http`
-# provider. OpenRouter speaks the OpenAI chat-completions shape, so we only
-# need to extract `choices[0].message.content`.
+# Usage (Yandex Eliza raw OpenRouter proxy — same model slugs as OpenRouter):
+#   export OPENROUTER_API_BASE_URL="https://api.eliza.yandex.net/raw/openrouter/v1"
+#   export OPENROUTER_API_KEY="<yandex-oauth-token>"
+#   npx promptfoo@latest eval
 
 description: YDB skills compatibility matrix
 
@@ -24,7 +24,7 @@ evaluateOptions:
 
 _http_base: &http
   method: POST
-  url: "https://openrouter.ai/api/v1/chat/completions"
+  url: "{{ env.OPENROUTER_API_BASE_URL or 'https://openrouter.ai/api/v1' }}/chat/completions"
   headers:
     Content-Type: application/json
     Authorization: "Bearer {{ env.OPENROUTER_API_KEY }}"

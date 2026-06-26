@@ -11,7 +11,7 @@ Writing YQL against YDB tables, designing schemas to back those queries, and aud
 
 1. **Classify the task.** Write a new query or schema, audit existing code, convert from another SQL dialect, or read an `EXPLAIN`.
 2. **Load sources** per the table below.
-3. **Do the work.** When auditing, cite the rule ID for any anti-pattern flagged — `RULE-JV-NN` for Java, `RULE-GO-NN` for Go, `RULE-CPP-NN` for C++. When the topic isn't covered by the loaded sources, say so and link to upstream YDB docs rather than guessing.
+3. **Do the work.** When auditing, cite `RULE-JV-NN`, `RULE-GO-NN`, or `RULE-CPP-NN`. C++ audits: never empty, never rule-ID-only — use the 4-part format in `rules/embed/cpp.md` (ID + diagnosis in sentence 1, then trigger, failure mode, fix).
 
 ## Load sources
 

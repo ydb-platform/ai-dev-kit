@@ -8,7 +8,7 @@ The tool is [promptfoo](https://www.promptfoo.dev). One declarative `promptfooco
 
 Every eval runs this shape:
 
-- **System prompt:** the installable skills' content embedded into one system message. `ydb-core` is loaded as `SKILL.md` plus its `references/balancing.md`, `references/session-lifecycle.md`, `references/embed/go.md`, and `rules/embed/go.md`. `ydb-table` is loaded as `SKILL.md` plus its `references/working-with-data.md`, `references/embed/java.md`, `references/embed/go.md`, `rules/embed/java.md`, and `rules/embed/go.md` — i.e. the full body of each skill, as if the agent had read every Load-Sources entry.
+- **System prompt:** the installable skills' content embedded into one system message. `ydb-core` is loaded as `SKILL.md` plus its `references/balancing.md`, `references/session-lifecycle.md`, `references/embed/go.md`, and `rules/embed/go.md`. `ydb-table` is loaded as `SKILL.md` plus its `references/working-with-data.md`, `references/embed/java.md`, `references/embed/go.md`, `references/embed/cpp.md`, `rules/embed/java.md`, `rules/embed/go.md`, and `rules/embed/cpp.md` — i.e. the full body of each skill, as if the agent had read every Load-Sources entry.
 - **User prompt:** supplied by the test case (`tests/<skill>/<case>.yaml`).
 - **Grader:** `anthropic/claude-haiku-4.5` judges each `llm-rubric` assertion against a criterion block written in plain English.
 
@@ -22,9 +22,12 @@ One-time:
 
 ```bash
 export OPENROUTER_API_KEY="<token>"
+# Optional — Yandex Eliza raw OpenRouter proxy (same model slugs as OpenRouter):
+export OPENROUTER_API_BASE_URL="https://api.eliza.yandex.net/raw/openrouter/v1"
 ```
 
-The matrix talks to public OpenRouter (`https://openrouter.ai/api/v1/chat/completions`); the URL is hardcoded in `promptfooconfig.yaml`, only the key has to come from the environment.
+The matrix uses `OPENROUTER_API_BASE_URL` from the environment, defaulting to
+`https://openrouter.ai/api/v1` — see the header comment in [`promptfooconfig.yaml`](../promptfooconfig.yaml).
 
 promptfoo runs via `npx` — no local install needed:
 
@@ -138,7 +141,7 @@ Per-model summary: pass rate column on the right. This is what drives the "minim
 
 ## Committing matrix results
 
-Not done by default. The matrix changes every time any skill or test changes, so committing full results would be noisy. If you want a snapshot for an external stakeholder, run `npx promptfoo@latest eval --output matrix.md --format markdown`.
+Not done by default. The matrix changes every time any skill or test changes, so committing full results would be noisy. For a committed A/B snapshot see [`matrix-baseline.md`](../matrix-baseline.md). Ad-hoc export: `npx promptfoo@latest eval --output matrix.md --format markdown`.
 
 ## Static validator
 
