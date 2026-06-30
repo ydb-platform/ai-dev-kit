@@ -4,14 +4,9 @@
 # loaded into a coding-agent-style system prompt. Identifies the minimum
 # model per vendor family that still passes most tests.
 #
-# Usage:
-#   export OPENROUTER_API_KEY="..."
+# Usage (OpenRouter):
+#   export OPENROUTER_API_KEY="sk-or-..."
 #   npx promptfoo@latest eval
-#   npx promptfoo@latest view
-#
-# Every model is accessed through public OpenRouter via the generic `http`
-# provider. OpenRouter speaks the OpenAI chat-completions shape, so we only
-# need to extract `choices[0].message.content`.
 
 description: YDB skills compatibility matrix
 
@@ -24,7 +19,7 @@ evaluateOptions:
 
 _http_base: &http
   method: POST
-  url: "https://openrouter.ai/api/v1/chat/completions"
+  url: "{{ env.OPENROUTER_API_BASE_URL or 'https://openrouter.ai/api/v1' }}/chat/completions"
   headers:
     Content-Type: application/json
     Authorization: "Bearer {{ env.OPENROUTER_API_KEY }}"
@@ -86,6 +81,12 @@ _messages: &messages
 
       --- ydb-table / rules / embed / go.md ---
       {{ ydb_table_rules_go }}
+
+      --- ydb-table / references / embed / cpp.md ---
+      {{ ydb_table_refs_cpp }}
+
+      --- ydb-table / rules / embed / cpp.md ---
+      {{ ydb_table_rules_cpp }}
   - role: user
     content: "{{ user_prompt }}"
 
@@ -223,6 +224,8 @@ defaultTest:
     ydb_table_rules_java: file://skills/ydb-table/rules/embed/java.md
     ydb_table_refs_go: file://skills/ydb-table/references/embed/go.md
     ydb_table_rules_go: file://skills/ydb-table/rules/embed/go.md
+    ydb_table_refs_cpp: file://skills/ydb-table/references/embed/cpp.md
+    ydb_table_rules_cpp: file://skills/ydb-table/rules/embed/cpp.md
   # Hard pre-filter: any output that came back as the defensive
   # "[provider error] ..." stub is a fail regardless of what the grader says.
   # Without this the grader will happily pass a 400/401 error as a "valid

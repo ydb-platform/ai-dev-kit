@@ -55,6 +55,7 @@ SDKs, all official under https://github.com/ydb-platform/:
 | Python | ydb-python-sdk | PyPI `ydb` | ✅ | ✅ | ✅ |
 | Java | ydb-java-sdk | Maven `tech.ydb:ydb-sdk-bom` + `ydb-sdk-query` / `ydb-sdk-topic` / `ydb-sdk-coordination` | ✅ | ✅ | ✅ |
 | JS/TS | ydb-js-sdk | npm `@ydbjs/core`, `@ydbjs/query`, `@ydbjs/topic`, `@ydbjs/coordination` | ✅ | ✅ | ✅ |
+| C++ | ydb-cpp-sdk | CMake `find_package(ydb-cpp-sdk)` / Debian `libydb-cpp-dev`; link `YDB-CPP-SDK::Driver` + `Query` / `Table` / `Topic` / `Coordination` | ✅ | ✅ | ✅ |
 
 Q = queries, T = topics, C = coordination.
 
