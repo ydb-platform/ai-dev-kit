@@ -26,7 +26,7 @@ evaluateOptions:
 
 _http_base: &http
   method: POST
-  url: "{{ env.OPENROUTER_API_BASE_URL or 'https://openrouter.ai/api/v1' }}/chat/completions"
+  url: "https://openrouter.ai/api/v1/chat/completions"
   headers:
     Content-Type: application/json
     Authorization: "Bearer {{ env.OPENROUTER_API_KEY }}"
@@ -116,24 +116,6 @@ providers:
         messages: *messages
         temperature: 0.0
         max_tokens: 256
-  - id: https:z-ai/glm-4.7
-    label: Frontier OSS · Z.ai GLM 4.7
-    config:
-      <<: *http
-      body:
-        model: "z-ai/glm-4.7"
-        messages: *messages
-        temperature: 0.0
-        max_tokens: 256
-  - id: https:minimax/minimax-m2.7
-    label: Frontier OSS · MiniMax M2.7
-    config:
-      <<: *http
-      body:
-        model: "minimax/minimax-m2.7"
-        messages: *messages
-        temperature: 0.0
-        max_tokens: 256
 
   # ── Laptop · Ollama-runnable ───────────────────────────────────────────
   - id: https:openai/gpt-oss-20b
@@ -148,12 +130,12 @@ providers:
         # main matrix: 256 gets eaten by the thinking budget and the
         # visible slug comes back empty. 8192 leaves headroom.
         max_tokens: 8192
-  - id: https:mistralai/mistral-small-2603
-    label: Laptop · Mistral Small 2603
+  - id: https:mistralai/devstral-small
+    label: Laptop · Mistral Devstral Small
     config:
       <<: *http
       body:
-        model: "mistralai/mistral-small-2603"
+        model: "mistralai/devstral-small"
         messages: *messages
         temperature: 0.0
         max_tokens: 256
@@ -183,32 +165,6 @@ defaultTest:
   assert:
     - type: not-contains
       value: "[provider error]"
-  options:
-    provider:
-      id: https:anthropic/claude-haiku-4.5-grader
-      config:
-        <<: *http
-        body:
-          model: "anthropic/claude-haiku-4.5"
-          messages:
-            - role: user
-              content: "{{ prompt }}"
-          temperature: 0.0
-          max_tokens: 1024
-    rubricPrompt: |
-      Grade whether an AI assistant's response substantively addressed a
-      user's YDB question and satisfied the rubric criteria.
-
-      USER PROMPT:
-      {{ user_prompt }}
-
-      ASSISTANT RESPONSE:
-      {{ output }}
-
-      RUBRIC:
-      {{ rubric }}
-
-      Reply with JSON only: {"pass": true/false, "score": 0.0-1.0, "reason": "..."}
 
 # Routing tests are discovered from tests/routing/*.yaml.
 tests:

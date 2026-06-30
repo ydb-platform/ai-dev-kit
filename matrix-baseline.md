@@ -1,9 +1,8 @@
 # Matrix baseline — 2026-06-29 (Haiku grader, C++ review fixes)
 
 Snapshot of the A/B compatibility matrix after PR #6 review fixes: ydb.tech-grounded
-C++ docs (`references/embed/cpp.md`, `rules/embed/cpp.md`), CPP-06/08/09 test snippet
-updates, and routing config aligned with the main matrix (Mistral Small 2603, GLM,
-MiniMax, Haiku grader for routing llm-rubric).
+C++ docs (`references/embed/cpp.md`, `rules/embed/cpp.md`) and CPP-06/08/09 test snippet
+updates.
 
 Future edits to skills should be compared against this — a meaningful change should move
 cells from `REDUNDANT` / `INSUFFICIENT` toward `SKILL_WORKS` without regressing
@@ -27,7 +26,6 @@ python3 scripts/ab-compare.py \
 - **11 providers** × **39 tests** = 429 cells per side.
 - Skill side: `eval-LnN` (concurrency 4) — 398 pass, 31 fail, 0 errors.
 - Bare side: `eval-NqX` (concurrency 4) — 46 pass, 383 fail, 0 errors.
-- Routing matrix (separate config): `eval-uKD-2026-06-29T09:39:50` — 79/99 pass.
 - Reasoning disabled only on Moonshot Kimi K2.6 — other providers reject the flag.
   Qwen3.6 35B-A3B and OpenAI gpt-oss-20b keep reasoning on with `max_tokens` bumped
   to 8192. See [`docs/testing.md`](docs/testing.md#speed-knobs).
