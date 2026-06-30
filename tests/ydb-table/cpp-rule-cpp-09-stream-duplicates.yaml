@@ -8,8 +8,8 @@ vars:
 
     ```cpp
     void billSeasons(NYdb::NQuery::TQueryClient& client) {
-        ThrowOnError(client.RetryQuerySync([&](TQueryClient qc) -> TStatus {
-            auto stream = qc.StreamExecuteQuery(
+        ThrowOnError(client.RetryQuerySync([&](NYdb::NQuery::TSession session) -> TStatus {
+            auto stream = session.StreamExecuteQuery(
                 "SELECT series_id, season_id FROM seasons",
                 TTxControl::NoTx()
             ).GetValueSync();
@@ -48,7 +48,8 @@ assert:
       The response should:
       - Cite `RULE-CPP-09` by ID.
       - Explain that `StreamExecuteQuery` inside a retrier can emit
-        duplicate rows on replay (per upstream basic example).
+        duplicate rows on replay (per YDB docs — stream queries /
+        retry recipe).
       - Connect this to double-charging via `chargeCustomer` with no
         dedupe / idempotent sink.
       - Recommend idempotent billing (keyed UPSERT, dedup table) or

@@ -7,11 +7,6 @@
 # Usage (OpenRouter):
 #   export OPENROUTER_API_KEY="sk-or-..."
 #   npx promptfoo@latest eval
-#
-# Usage (Yandex Eliza raw OpenRouter proxy — same model slugs as OpenRouter):
-#   export OPENROUTER_API_BASE_URL="https://api.eliza.yandex.net/raw/openrouter/v1"
-#   export OPENROUTER_API_KEY="<yandex-oauth-token>"
-#   npx promptfoo@latest eval
 
 description: YDB skills compatibility matrix
 

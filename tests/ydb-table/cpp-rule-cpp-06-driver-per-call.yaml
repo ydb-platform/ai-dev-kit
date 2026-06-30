@@ -14,22 +14,19 @@ vars:
         NYdb::TDriver driver(cfg);
         NYdb::NQuery::TQueryClient client(driver);
 
-        ThrowOnError(client.RetryQuerySync([&](NYdb::NQuery::TSession session) {
+        auto queryResult = client.RetryQuerySync([&](NYdb::NQuery::TSession session) {
             auto params = NYdb::TParamsBuilder()
                 .AddParam("$id").Uint64(req.userId).Build()
                 .Build();
-            auto result = session.ExecuteQuery(
+            return session.ExecuteQuery(
                 "SELECT name FROM users WHERE id = $id",
                 NYdb::NQuery::TTxControl::BeginTx(
                     NYdb::NQuery::TTxSettings::SnapshotRO()).CommitTx(),
                 params
             ).GetValueSync();
-            if (!result.IsSuccess()) {
-                return result;
-            }
-            writeUserToResponse(result, res);
-            return result;
-        }));
+        });
+        ThrowOnError(queryResult);
+        writeUserToResponse(queryResult, res);
 
         driver.Stop(true);
     }

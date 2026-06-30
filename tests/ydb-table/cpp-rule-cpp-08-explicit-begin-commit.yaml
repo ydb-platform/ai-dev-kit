@@ -7,8 +7,7 @@ vars:
 
     ```cpp
     TStatus markProcessed(NYdb::NQuery::TQueryClient& client, uint64_t id) {
-        return client.RetryQuerySync([id](TQueryClient queryClient) -> TStatus {
-            auto session = queryClient.GetSession().GetValueSync().GetSession();
+        return client.RetryQuerySync([id](NYdb::NQuery::TSession session) -> TStatus {
             auto begin = session.BeginTransaction(TTxSettings::SerializableRW())
                 .GetValueSync();
             if (!begin.IsSuccess()) {
@@ -38,8 +37,9 @@ assert:
       - Identify separate `BeginTransaction` + `Commit` for a single
         `ExecuteQuery` where `TTxControl::BeginTx(...).CommitTx()`
         would fuse round trips.
-      - Reference the upstream basic-example guidance that inline
-        tx control is preferable for most single-statement work.
+      - Reference YDB C++ example app docs (Managing transactions)
+        that fused transaction control on `ExecuteQuery` is preferable
+        for most single-statement work.
       - Not flag multi-step `MultiStep`-style flows (this snippet is
         single-statement).
       - Not invent a different RULE-CPP-XX ID.

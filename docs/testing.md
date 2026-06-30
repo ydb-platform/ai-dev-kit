@@ -22,8 +22,6 @@ One-time:
 
 ```bash
 export OPENROUTER_API_KEY="<token>"
-# Optional — Yandex Eliza raw OpenRouter proxy (same model slugs as OpenRouter):
-export OPENROUTER_API_BASE_URL="https://api.eliza.yandex.net/raw/openrouter/v1"
 ```
 
 The matrix uses `OPENROUTER_API_BASE_URL` from the environment, defaulting to

@@ -125,7 +125,7 @@ One primary rule per question. **Mis-routing fails:** `INSERT INTO` + `.Idempote
 
 ### RULE-CPP-08: Explicit begin/commit for one statement
 
-**Severity**: Medium | **Opener**: `RULE-CPP-08` — separate `BeginTransaction` + `Commit` add round trips; fuse with `TTxControl::BeginTx(...).CommitTx()` for this single statement (per basic example / transactions guide).
+**Severity**: Medium | **Opener**: `RULE-CPP-08` — separate `BeginTransaction` + `Commit` add round trips; fuse with `TTxControl::BeginTx(...).CommitTx()` for this single statement (per C++ example app — Managing transactions).
 
 **What to look for**: `BeginTransaction` → one `ExecuteQuery` → `Commit()`. Not multi-step flows.
 
@@ -133,19 +133,19 @@ One primary rule per question. **Mis-routing fails:** `INSERT INTO` + `.Idempote
 
 **Fix**: pass `TTxControl::BeginTx(TTxSettings::SerializableRW()).CommitTx()` on `ExecuteQuery`.
 
-**Source**: <https://ydb.tech/docs/en/concepts/transactions>.
+**Source**: <https://ydb.tech/docs/en/concepts/transactions>, <https://ydb.tech/docs/en/dev/example-app/example-cpp#tcl>.
 
 ### RULE-CPP-09: Stream consumer assumes exactly-once rows
 
-**Severity**: High | **Opener**: `RULE-CPP-09` — `StreamExecuteQuery` inside a retrier can re-emit rows on replay (basic example); `chargeCustomer` without dedupe double-charges.
+**Severity**: High | **Opener**: `RULE-CPP-09` — `StreamExecuteQuery` inside a retrier can re-emit rows on replay; `chargeCustomer` without dedupe double-charges.
 
 **What to look for**: `StreamExecuteQuery` + `ReadNext` + per-row side effect in/under `RetryQuerySync`.
 
-**Problem**: basic example: *"duplicate lines in the output stream due to an external retryer."*
+**Problem**: per YDB C++ example app (Stream queries): *"It is possible for lines to be duplicated in the output stream due to an external retrier"*.
 
 **Fix**: **keyed UPSERT** billing ledger, **dedup table**, or **`std::unordered_set`** of seen keys — not buffer-then-charge without per-key idempotency.
 
-**Source**: `ydb-cpp-sdk` `examples/basic_example/basic_example.cpp`.
+**Source**: <https://ydb.tech/docs/en/dev/example-app/example-cpp#stream-query>, <https://ydb.tech/docs/en/recipes/ydb-sdk/retry>.
 
 ### RULE-CPP-10: `INSERT INTO` with `.Idempotent(true)`
 
