@@ -34,7 +34,7 @@ err = db.Query().Do(ctx, func(ctx context.Context, s query.Session) error {
 Three load-bearing pieces:
 
 - **`query.WithIdempotent()`** declares the closure safe to replay on *conditionally* retryable failures (connection drop, gRPC reset, session loss). Set on reads and on writes keyed by a client-generated id; do not set on a non-idempotent write such as a counter increment.
-- **`query.WithParameters(ydb.ParamsBuilder()...)`** binds values rather than concatenating them. Closes SQL injection and per-distinct-text plan-cache churn. The server infers types from the builder, so a leading `DECLARE` block is optional for scalar parameters — write one only when you want an explicit contract (typically for `List<Struct<...>>` and other compound types) or to fail-fast on a parameter-type mismatch from the caller.
+- **`query.WithParameters(ydb.ParamsBuilder()...)`** binds values rather than concatenating them. Closes SQL injection and per-distinct-text plan-cache churn.
 - **All data processing happens inside the closure.** Assign to outer variables only on the success path — the line that returns `nil`. Anything assigned earlier survives across retry attempts and produces wrong values.
 
 Source: <https://github.com/ydb-platform/ydb-go-sdk> README "Example Usage".

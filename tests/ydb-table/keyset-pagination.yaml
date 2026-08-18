@@ -20,10 +20,7 @@ assert:
       - Bind cursor and limit through the SDK's typed parameter API
         (`ydb.ParamsBuilder()` with `.Param("$cursorCreatedAt").Timestamp(...)`,
         `.Param("$cursorId").Uint64(...)`, and `.Param("$limit").Uint64(...)` (set to 50)).
-        A leading `DECLARE` block
-        in the query body is acceptable but not required (parameter types
-        are inferred from the builder); raw-string interpolation of values
-        into the query text is a fail.
+        Raw-string interpolation of values into the query text is a fail.
       - Wrap the per-page read in `db.Query().Do(ctx, func(ctx, s query.Session) error { ... })`
         and pass `query.WithIdempotent()` — the read is idempotent.
       - Show or describe the caller-side cursor loop that terminates when

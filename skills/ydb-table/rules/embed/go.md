@@ -90,7 +90,7 @@ Audit rules for application code talking to YDB through the Go SDK. Each rule is
 
 **Problem**: two failure modes the SDK's parameter API closes at once. SQL injection — caller values become YQL syntax when concatenated. Per-call query-plan miss — the server's plan cache is keyed on query text, so every distinct rendered string forces a fresh plan compilation.
 
-**Fix**: bind values through `ydb.ParamsBuilder().Param("$name").<Type>(value).Build()` and pass them via `query.WithParameters(...)` (or `table.NewQueryParameters(...)` for Table Service). A `DECLARE` block in the query body is optional — types are inferred from the bound values — and is justified when the parameter shape is compound (`List<Struct<...>>`) or when an explicit caller contract is desirable.
+**Fix**: bind values through `ydb.ParamsBuilder().Param("$name").<Type>(value).Build()` and pass them via `query.WithParameters(...)` (or `table.NewQueryParameters(...)` for Table Service).
 
 **Source**: `ydb-platform/ydb-go-sdk` — `ParamsBuilder` in <https://github.com/ydb-platform/ydb-go-sdk/blob/master/params_builder.go>; `query.WithParameters` in <https://github.com/ydb-platform/ydb-go-sdk/blob/master/query/execute_options.go>. YQL parameters reference: <https://ydb.tech/docs/en/yql/reference/syntax/declare>.
 
