@@ -17,6 +17,7 @@ Writing YQL against YDB tables, designing schemas to back those queries, and aud
 
 | Task                                                | Files to consult                                                                          |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Parameter binding, `DECLARE` syntax and compatibility | `references/query-parameters.md`                                                        |
 | Reads, writes, transaction modes, batch vs bulk     | `references/working-with-data.md`                                                         |
 | Writing Java application code against YDB           | `references/embed/java.md`                                                                |
 | Auditing Java application code against YDB          | `rules/embed/java.md`                                                                     |
@@ -29,7 +30,7 @@ Writing YQL against YDB tables, designing schemas to back those queries, and aud
 
 ## Content rules
 
-- Always parameterize: bind values through the SDK's typed parameter API (e.g. `ydb.ParamsBuilder()` in Go, `TParamsBuilder` in C++, `PreparedStatement` in JDBC), do not concatenate them into the query text. Plan-cache reuse depends on it; concatenated literals miss the cache. A leading `DECLARE` block in the query body is optional in modern YDB — scalar parameter types are inferred from the bound values — and earns its place on compound shapes (`List<Struct<...>>`) or as an explicit caller contract.
+- Always parameterize: bind values through the SDK's typed parameter API (e.g. `ydb.ParamsBuilder()` in Go, `TParamsBuilder` in C++, `PreparedStatement` in JDBC), do not concatenate them into the query text. Plan-cache reuse depends on it; concatenated literals miss the cache. `DECLARE` only describes parameter types and never replaces binding; load `references/query-parameters.md` before deciding whether to emit it.
 - Prefer the Query Service over the deprecated Table Service for new code.
 - When converting from another SQL dialect, surface where YDB diverges — primary keys are partition keys, no `SERIAL` / `AUTO_INCREMENT`, JOIN behavior and built-in function names differ — rather than producing code that happens to parse.
 - Don't fabricate YQL syntax, built-in names, or SDK symbols. If the loaded sources don't cover the question, link the relevant page under <https://ydb.tech/docs/en/yql/reference/> and state the uncertainty.

@@ -8,7 +8,7 @@ The tool is [promptfoo](https://www.promptfoo.dev). One declarative `promptfooco
 
 Every eval runs this shape:
 
-- **System prompt:** the installable skills' content embedded into one system message. `ydb-core` is loaded as `SKILL.md` plus its `references/balancing.md`, `references/session-lifecycle.md`, `references/embed/go.md`, and `rules/embed/go.md`. `ydb-table` is loaded as `SKILL.md` plus its `references/working-with-data.md`, `references/embed/java.md`, `references/embed/go.md`, `references/embed/cpp.md`, `rules/embed/java.md`, `rules/embed/go.md`, and `rules/embed/cpp.md` — i.e. the full body of each skill, as if the agent had read every Load-Sources entry.
+- **System prompt:** the installable skills' content embedded into one system message. `ydb-core` is loaded as `SKILL.md` plus its `references/balancing.md`, `references/session-lifecycle.md`, `references/embed/go.md`, and `rules/embed/go.md`. `ydb-table` is loaded as `SKILL.md` plus its `references/working-with-data.md`, `references/query-parameters.md`, `references/embed/java.md`, `references/embed/go.md`, `references/embed/cpp.md`, `rules/embed/java.md`, `rules/embed/go.md`, and `rules/embed/cpp.md` — i.e. the full body of each skill, as if the agent had read every Load-Sources entry.
 - **User prompt:** supplied by the test case (`tests/<skill>/<case>.yaml`).
 - **Grader:** `anthropic/claude-haiku-4.5` judges each `llm-rubric` assertion against a criterion block written in plain English.
 
@@ -104,7 +104,7 @@ assert:
     value: |
       The response should:
       - Use keyset pagination: `WHERE (created_at, id) > ...`. Avoid `OFFSET`.
-      - Declare parameters with `DECLARE` — no raw string interpolation.
+      - Bind values as typed parameters — no raw string interpolation.
       - Wrap the Go query in a session-retry scope (db.Query().Do(...)).
       Partial credit if pagination is correct but Go wrapper is missing.
 ```
