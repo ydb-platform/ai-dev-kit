@@ -1,6 +1,6 @@
 ---
 name: ydb-core
-description: Entry point and router for YDB-related work. Orients an LLM about YDB — what it is, what surfaces it exposes, where to read upstream docs, which specialist skill to load for surface-specific questions. Covers SDK packages, connection strings and auth, local Docker, schema fundamentals, common integrations (ORMs, migration tools, Terraform), client-side balancing, and session lifecycle / resilience under rolling restart. Use when the user asks a general YDB question, mentions YDB without naming a specific surface (queries, topics, coordination), needs setup help, asks about balancing policies or `BAD_SESSION` / `shutdownHint` / rolling restart, or when another YDB skill needs foundational context. Also triggers on `grpcs://` / `grpc://`, `ydb profile`, `ydb scheme`, `balancers.RandomChoice`, `balancers.PreferNearestDC`, `ydb.WithBalancer`, `session-balancer`, and "getting started with YDB" prompts.
+description: Entry point and router for YDB-related work. Orients an LLM about YDB — what it is, what surfaces it exposes, where to read upstream docs, which specialist skill to load for surface-specific questions. Covers SDK packages, connection strings and auth, local Docker, schema fundamentals, YDB CLI command discovery and scheme inspection, common integrations (ORMs, migration tools, Terraform), client-side balancing, and session lifecycle / resilience under rolling restart. Use when the user asks a general YDB question, mentions YDB without naming a specific surface (queries, topics, coordination), needs setup help, wants to inspect a database with YDB CLI, asks about balancing policies or `BAD_SESSION` / `shutdownHint` / rolling restart, or when another YDB skill needs foundational context. Also triggers on `grpcs://` / `grpc://`, `ydb --help`, `ydb version`, `ydb config profile`, `ydb config info`, `ydb discovery`, `ydb scheme`, `balancers.RandomChoice`, `balancers.PreferNearestDC`, `ydb.WithBalancer`, `session-balancer`, and "getting started with YDB" prompts.
 ---
 
 # YDB Core
@@ -63,7 +63,28 @@ Q = queries, T = topics, C = coordination.
 
 **Kafka clients**: YDB does NOT ship a Kafka adapter package. Use standard Apache Kafka clients (`kafka-clients`, `franz-go`, `confluent-kafka-python`, `kafkajs`) against the YDB Kafka endpoint on port 9092. Docs: https://ydb.tech/docs/en/reference/kafka-api/.
 
-**CLI** (`ydb` binary): install https://ydb.tech/docs/en/reference/ydb-cli/install. Admin / namespace subcommands (covered here): `ydb profile …`, `ydb discovery …`, `ydb scheme …`. Query execution (`ydb sql`, `ydb yql`) — route to the ydb-table skill.
+**CLI** (`ydb` binary): install https://ydb.tech/docs/en/reference/ydb-cli/install. Connection and namespace subcommands covered here: `ydb config profile …`, `ydb config info`, `ydb discovery …`, `ydb scheme …`. Query execution (`ydb sql`) — route to the ydb-table skill.
+
+## cli
+
+Treat the installed CLI as a versioned interface whose syntax must be discovered at runtime:
+
+1. Run `ydb version` and `ydb --help` before composing commands for a session.
+2. Run `ydb <subcommand> --help` before first use of that command tree; use `-hh` when the regular help says more options are hidden.
+3. Keep global connection options before the first subcommand. Preserve the endpoint, database, profile, certificate, and credential options supplied by the user; do not invent or silently replace them.
+4. Prefer a non-interactive subcommand. Running `ydb` without a subcommand opens interactive mode; do that only when the user explicitly requests an interactive session.
+5. Inspect namespace objects with `ydb scheme ls` and `ydb scheme describe`. Start at the narrowest known path; do not recursively enumerate the database root by default.
+6. Route SQL construction, validation, and execution to `ydb-table`. Route an uncovered command tree to its upstream `--help` and documentation instead of extrapolating.
+
+Apply execution gates by effect, not by the command's name:
+
+- Treat `version`, help, `scheme ls`, `scheme describe`, and `ydb sql --explain` as read-only discovery. Do not assume that other commands under the same command tree are read-only.
+- Before any mutating CLI operation—including SQL DDL/DML, `scheme mkdir`, `scheme rmdir`, permission changes, imports, and administrative commands—use a two-phase gate: first show the exact operation, target, effect, and a command without confirmation-bypass flags, then stop. Execute only after the user confirms that displayed operation in a subsequent turn; the initial request to mutate is not the execution confirmation.
+- Do not include confirmation-bypass flags in the phase-one command, even if the initial request asks for them. After confirmation, include global `-y` / `--assume-yes` or command-specific flags such as `ydb scheme rmdir -f` / `--force` only if the user explicitly requested them; `-f` used by `ydb sql` to read query text is unrelated.
+- During discovery or validation, run only help, version, describe/list, or non-executing explain commands. Never probe a mutating command by attempting it against a profile or endpoint.
+- Treat `ydb admin` as high risk and outside this skill's operational scope. Its commands can damage a cluster and may require explicit global parameters even when another command would use a default profile; inspect `ydb admin --help` and request the missing target context rather than constructing a command from memory.
+
+YDB CLI AI-mode implementation source: https://github.com/ydb-platform/ydb/blob/0c0d3f432c737269b0b91a2ec93cf76a8b76d00d/ydb/public/lib/ydb_cli/commands/interactive/ai/ai_model_handler.cpp. CLI command reference: https://ydb.tech/docs/en/reference/ydb-cli/commands.
 
 ## connecting
 

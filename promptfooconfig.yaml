@@ -73,6 +73,9 @@ _messages: &messages
       --- ydb-table / references / query-parameters.md ---
       {{ ydb_table_refs_query_parameters }}
 
+      --- ydb-table / references / cli.md ---
+      {{ ydb_table_refs_cli }}
+
       --- ydb-table / references / embed / java.md ---
       {{ ydb_table_refs_java }}
 
@@ -224,6 +227,7 @@ defaultTest:
     ydb_table: file://skills/ydb-table/SKILL.md
     ydb_table_refs_working_with_data: file://skills/ydb-table/references/working-with-data.md
     ydb_table_refs_query_parameters: file://skills/ydb-table/references/query-parameters.md
+    ydb_table_refs_cli: file://skills/ydb-table/references/cli.md
     ydb_table_refs_java: file://skills/ydb-table/references/embed/java.md
     ydb_table_rules_java: file://skills/ydb-table/rules/embed/java.md
     ydb_table_refs_go: file://skills/ydb-table/references/embed/go.md
