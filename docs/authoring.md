@@ -8,8 +8,8 @@ Skills are decomposed **by YDB surface**, not by developer medium (code vs SQL v
 
 | Skill | Surface |
 |-------|---------|
-| `ydb-core` | Entry point / router. Covers YDB overview, connection + auth, schema basics, admin CLI. For models unfamiliar with YDB or prone to hallucination. |
-| `ydb-table` | Writing YQL and executing it — in SDK code, from CLI (`ydb sql`, `ydb yql`), or directly. |
+| `ydb-core` | Entry point / router. Covers YDB overview, connection + auth, schema basics, CLI discovery and scheme inspection. For models unfamiliar with YDB or prone to hallucination. |
+| `ydb-table` | Writing YQL and executing it — in SDK code, from CLI (`ydb sql`), or directly. |
 | `ydb-topics` | Pub/sub API + native Kafka adapter. |
 | `ydb-coordination` | Distributed locks, semaphores, leader election. |
 
@@ -37,6 +37,7 @@ The body of `SKILL.md` carries stable section anchors so other skills can deep-l
 - `## versioning` — server + SDK release cadence
 - `## surfaces` — router to `ydb-table`, `ydb-topics`, `ydb-coordination`
 - `## packages` — SDK repos, install coordinates, CLI, JDBC
+- `## cli` — version-aware command discovery, connection context, inspection, and execution gates
 - `## connecting` — connection strings, auth env vars, CLI profile
 - `## balancing` — pointer to `references/balancing.md` + `references/session-lifecycle.md`
 - `## local-deployment` — Docker / Kubernetes / Ansible
