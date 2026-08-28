@@ -13,15 +13,18 @@ assert:
       The response should:
       - Verify supported formats and advanced parameter flags with
         `ydb sql -hh` rather than assuming them.
-      - For multi-row CSV and TSV, use `--input-file`, the matching
-        `--input-format`, and `--input-framing newline-delimited`; explain that
-        the default iterative mode executes once per row and transaction.
-      - Explain that headers map to declared parameter names, or use
-        `--input-columns` when a header is absent, and that type conversion is
-        driven by `DECLARE`.
-      - Show that one batched execution requires a declared `List<...>` or
-        `List<Struct<...>>` parameter plus `--input-param-name` and
-        `--input-batch full` or `adaptive`.
+      - For a non-TTY agent subprocess, feed multi-row CSV and TSV with
+        `--input-file - < file`, the matching `--input-format`, and
+        `--input-framing newline-delimited`; explain that the default iterative
+        mode executes once per row and transaction.
+      - Explain that headers map to declared parameter names. If a header is
+        absent, show comma-delimited `--input-columns` for CSV and a literal-tab
+        form for TSV; type conversion is driven by `DECLARE`.
+      - Show that one execution containing all rows requires a declared
+        `List<...>` or `List<Struct<...>>` parameter plus `--input-param-name`
+        and `--input-batch full`.
+      - Describe `adaptive` as multiple independent batch executions and
+        transactions; do not claim it provides one atomic execution.
       - State that Arrow IPC/Feather is not a supported `ydb sql` parameter
         input format and not invent `--input-format arrow`.
       - Keep `-p prod` before `sql`, not execute anything, and not add `-y`.

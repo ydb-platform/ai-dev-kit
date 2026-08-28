@@ -16,13 +16,13 @@ assert:
       The response should:
       - Verify the installed `ydb sql` parameter interface with `-hh` before
         relying on advanced input options.
-      - Use `ydb -p prod sql -f query.sql --input-file params.json
-        --input-format json`, with global connection options before `sql`.
+      - For a non-TTY agent subprocess, use `ydb -p prod sql -f query.sql
+        --input-file - --input-format json < params.json`, with global
+        connection options before `sql`.
       - Encode id as JSON number 42, timestamp as an ISO-8601 JSON string,
         Decimal as a JSON string compatible with Decimal(22,9), tags as a JSON
         array, and deleted_at as JSON null.
       - Encode the JsonDocument value as a JSON string containing serialized
         JSON, not as an unquoted nested object.
-      - Use parameter-file keys without `$`, not interpolate values into SQL,
-        and not use the hidden legacy `--param-file` option.
+      - Use parameter-file keys without `$` and not interpolate values into SQL.
       - Not execute the query or add `-y`.

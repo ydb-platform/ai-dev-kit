@@ -6,11 +6,11 @@ Use `ydb sql` for query execution. Pair this reference with [`ydb-core`'s CLI wo
 
 1. Verify the installed interface with `ydb version`, `ydb --help`, and `ydb sql --help`. Use `ydb sql -hh` before relying on options omitted from short help.
 2. Inspect every referenced table whose schema is not already known with `ydb scheme describe <path>`. Do not guess column names, types, or primary-key order.
-3. For a filter whose actual values are unknown, run a bounded discovery query such as `SELECT DISTINCT ... LIMIT 20` before composing the final predicate. Do not guess a value merely because it is plausible.
+3. For a filter whose actual values are unknown, do not guess. Constrain discovery by a known primary-key range, suitable index, or another input restriction learned from the schema. Use `--explain` before a potentially large discovery query; if the plan can scan a large table, warn about the cost and obtain approval before executing it.
 4. Keep values outside SQL text. Declare CLI parameters in the query and bind them with `--param`, `--input-file`, or an input stream.
 5. Validate unfamiliar built-ins, joins, windows, casts, or multi-statement scripts with `ydb sql --explain` before execution. Iterate on validation errors without executing the query.
 6. Execute only after validation succeeds and the user asked to run the query. Show the exact query and connection target before DDL or DML and obtain explicit confirmation.
-7. Bound exploratory reads with `LIMIT`. Use a machine-readable `--format` only when the result will be parsed; use an export workflow rather than printing a large result into the agent context.
+7. Use `LIMIT` to bound returned rows, not as a claim that scan volume or server work is bounded. Bound input through keys or indexes, or inspect the plan and disclose a possible full scan. Use a machine-readable `--format` only when the result will be parsed; use an export workflow rather than printing a large result into the agent context.
 
 ## Command shapes
 
@@ -52,13 +52,13 @@ Replace the example profile only with connection options already supplied or app
 Choose the least fragile supported source:
 
 - Use repeated `--param` for a few scalar values.
-- Use one `--input-file <path> --input-format json` for many or composite values. Object keys are parameter names without `$`; `List`, `Struct`, `Tuple`, optional, temporal, decimal, binary, and document values follow [`query-parameters.md`](query-parameters.md).
-- Use `csv` or `tsv` for row-shaped scalar data. The header supplies parameter names without `$`; if the file has no header, set `--input-columns 'name1,name2'`. Type conversion still comes from `DECLARE`.
+- Use one JSON input stream for many or composite values. In an agent or CI non-TTY subprocess, use `--input-file - < params.json`; a named `--input-file params.json` requires stdin to be a TTY/PTY in current CLI releases. Object keys are parameter names without `$`; `List`, `Struct`, `Tuple`, optional, temporal, decimal, binary, and document values follow [`query-parameters.md`](query-parameters.md).
+- Use `csv` or `tsv` for row-shaped scalar data. Prefer keeping the header in the file; it supplies parameter names without `$`. For a headerless file, `--input-columns` must use the selected format's delimiter: comma for CSV and a literal tab for TSV. Type conversion still comes from `DECLARE`.
 - Use `raw` only for one `String` or `Utf8` value and name it with `--input-param-name`.
 
 Run `ydb sql -hh` before relying on these options. This is a local, read-only discovery command, not query execution; include it as a prerequisite when the user asks for commands but says not to execute the query. In reusable file-based commands, always spell out `--input-format`, including `json`, rather than depending on the default.
 
-Do not use the hidden legacy `--param-file`; use `--input-file`. Only one input file is accepted. Values may be combined with `--param` only when a parameter name appears in exactly one source. If parameters come from standard input, keep the query in `-s` or `-f`; the query and parameters cannot both consume stdin.
+Only one input file is accepted. Values may be combined with `--param` only when a parameter name appears in exactly one source. If parameters come from standard input, keep the query in `-s` or `-f`; the query and parameters cannot both consume stdin.
 
 For a JSON file containing one parameter set:
 
@@ -75,34 +75,63 @@ For a JSON file containing one parameter set:
 
 ```bash
 ydb -p <profile> sql -f query.sql \
-  --input-file params.json \
-  --input-format json
+  --input-file - \
+  --input-format json \
+  < params.json
 ```
+
+In an interactive terminal or an explicitly allocated PTY, `--input-file params.json` is also accepted. Do not use that form for a default headless agent subprocess.
 
 For one CSV or TSV row, the default `no-framing` executes once. For multiple rows, use newline framing; the default `iterative` batch mode executes the query once per row, each in its own transaction:
 
 ```bash
 ydb -p <profile> sql -f query.sql \
-  --input-file params.csv \
+  --input-file - \
   --input-format csv \
-  --input-framing newline-delimited
+  --input-framing newline-delimited \
+  < params.csv
 ```
 
-Use the same shape with `--input-format tsv` for TSV. CSV/TSV cells support scalar, decimal, optional, and PostgreSQL values; use JSON instead of embedding lists, dicts, or nested structs in a cell. An empty CSV/TSV field maps to `NULL` only when the declared type is optional.
+For TSV:
 
-For a single batched execution, declare one `List<Struct<...>>` parameter, set its name without `$`, and choose `full` or `adaptive` batching:
+```bash
+ydb -p <profile> sql -f query.sql \
+  --input-file - \
+  --input-format tsv \
+  --input-framing newline-delimited \
+  < params.tsv
+```
+
+For headerless CSV use, for example, `--input-columns 'id,value'`. For headerless TSV, pass a literal tab; Bash and Zsh can express it as `--input-columns $'id\tvalue'`. CSV/TSV cells support scalar, decimal, optional, and PostgreSQL values; use JSON instead of embedding lists, dicts, or nested structs in a cell. An empty CSV/TSV field maps to `NULL` only when the declared type is optional.
+
+For one execution containing every input row, declare one `List<Struct<...>>` parameter, set its name without `$`, and use `full` batching:
 
 ```bash
 ydb -p <profile> sql -f upsert.sql \
-  --input-file rows.csv \
+  --input-file - \
+  --input-format csv \
+  --input-framing newline-delimited \
+  --input-batch full \
+  --input-param-name rows \
+  < rows.csv
+```
+
+`full` sends all rows once at EOF in one request and one transaction; use it only when the complete parameter payload fits the request-size limit.
+
+For large or continuous input, `adaptive` sends a list and executes the query each time the row or delay threshold is reached:
+
+```bash
+ydb -p <profile> sql -f upsert.sql \
+  --input-file - \
   --input-format csv \
   --input-framing newline-delimited \
   --input-batch adaptive \
   --input-param-name rows \
-  --input-batch-max-rows 1000
+  --input-batch-max-rows 1000 \
+  < rows.csv
 ```
 
-`full` sends all rows once at EOF. `adaptive` sends a list whenever its row or delay threshold is reached. Both require the named query parameter to be a `List<...>`; preserve the normal DML confirmation gate.
+Each adaptive batch is an independent execution and transaction. If a later batch fails, earlier successful batches remain applied. Both modes require the named query parameter to be a `List<...>`; preserve the normal DML confirmation gate.
 
 ### Arrow boundary
 

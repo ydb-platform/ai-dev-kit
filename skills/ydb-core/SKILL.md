@@ -78,12 +78,13 @@ Treat the installed CLI as a versioned interface whose syntax must be discovered
 
 Apply execution gates by effect, not by the command's name:
 
-- Treat `version`, help, scheme listing/description, and `ydb sql --explain` as read-only discovery.
-- Execute SQL only when the user asked to run it. Show the exact query and target before DDL or DML, then obtain explicit confirmation.
-- Do not add `-y` / `--assume-yes` on the user's behalf.
+- Treat `version`, help, `scheme ls`, `scheme describe`, and `ydb sql --explain` as read-only discovery. Do not assume that other commands under the same command tree are read-only.
+- Before any mutating CLI operation—including SQL DDL/DML, `scheme mkdir`, `scheme rmdir`, permission changes, imports, and administrative commands—use a two-phase gate: first show the exact operation, target, effect, and a command without confirmation-bypass flags, then stop. Execute only after the user confirms that displayed operation in a subsequent turn; the initial request to mutate is not the execution confirmation.
+- Do not include confirmation-bypass flags in the phase-one command, even if the initial request asks for them. After confirmation, include global `-y` / `--assume-yes` or command-specific flags such as `ydb scheme rmdir -f` / `--force` only if the user explicitly requested them; `-f` used by `ydb sql` to read query text is unrelated.
+- During discovery or validation, run only help, version, describe/list, or non-executing explain commands. Never probe a mutating command by attempting it against a profile or endpoint.
 - Treat `ydb admin` as high risk and outside this skill's operational scope. Its commands can damage a cluster and may require explicit global parameters even when another command would use a default profile; inspect `ydb admin --help` and request the missing target context rather than constructing a command from memory.
 
-Agent workflow source: https://github.com/ydb-platform/ydb/blob/0c0d3f432c737269b0b91a2ec93cf76a8b76d00d/ydb/public/lib/ydb_cli/commands/interactive/ai/ai_model_handler.cpp. CLI command reference: https://ydb.tech/docs/en/reference/ydb-cli/commands.
+YDB CLI AI-mode implementation source: https://github.com/ydb-platform/ydb/blob/0c0d3f432c737269b0b91a2ec93cf76a8b76d00d/ydb/public/lib/ydb_cli/commands/interactive/ai/ai_model_handler.cpp. CLI command reference: https://ydb.tech/docs/en/reference/ydb-cli/commands.
 
 ## connecting
 
