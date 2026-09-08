@@ -1,0 +1,39 @@
+description: Java audit · Scan query forced for reads (RULE-JV-07)
+
+vars:
+  user_prompt: |
+    One of our reports was failing on large result sets, so we added a
+    connection option and it went away. Is this a reasonable fix?
+
+    `application.properties`:
+
+    ```properties
+    spring.datasource.url=jdbc:ydb:grpc://localhost:2136/local?forceScanSelect=true
+    spring.jpa.properties.hibernate.jdbc.batch_size=1000
+    ```
+
+assert:
+  - type: llm-rubric
+    value: |
+      The response should:
+      - Cite `RULE-JV-07` by ID.
+      - State that `forceScanSelect=true` routes SELECT statements
+        through the deprecated scan interface, and that upstream directs
+        new code at standard query execution.
+      - Point out that the setting is connection-wide, so a flag added
+        for one heavy report affects every other SELECT on that
+        connection.
+      - Note that scan queries do not support prepared statements, so the
+        option defeats `PreparedStatement` plan reuse; may also mention
+        the absence of SDK-side retries, the 10-minute cap, in-memory
+        sorting, MapJoin-only joins, or shared-resource contention.
+      - Recommend removing the option and restructuring the large read —
+        keyset pagination over the primary key — rather than switching
+        execution mode.
+      - Not invent a different RULE-JV-XX ID.
+
+      Full fail if the response:
+      - Endorses `forceScanSelect` as the right fix for large reads.
+      - Suggests `forceQueryMode=SCAN_QUERY` or `forceScanAndBulk` as an
+        alternative — both are deprecated in the driver itself.
+      - Comments only on `batch_size` and ignores the scan option.

@@ -1,0 +1,60 @@
+description: Go audit · Scan query used for a read the Query Service can serve (RULE-GO-12)
+
+vars:
+  user_prompt: |
+    We hit the 1000-row cap on this report read, so a colleague switched it
+    to a scan query and it works now. Anything wrong with this?
+
+    ```go
+    func loadDailyReport(ctx context.Context, db *ydb.Driver, cutoff time.Time) ([]Row, error) {
+        var out []Row
+        err := db.Table().Do(ctx, func(ctx context.Context, s table.Session) error {
+            res, err := s.StreamExecuteScanQuery(ctx,
+                `SELECT id, payload FROM events WHERE created_at > $cutoff`,
+                table.NewQueryParameters(
+                    table.ValueParam("$cutoff", types.TimestampValueFromTime(cutoff)),
+                ),
+            )
+            if err != nil {
+                return err
+            }
+            defer res.Close()
+            local := make([]Row, 0, 4096)
+            for res.NextResultSet(ctx) {
+                for res.NextRow() {
+                    var r Row
+                    if err := res.ScanWithDefaults(&r.ID, &r.Payload); err != nil {
+                        return err
+                    }
+                    local = append(local, r)
+                }
+            }
+            out = local
+            return res.Err()
+        })
+        return out, err
+    }
+    ```
+
+assert:
+  - type: llm-rubric
+    value: |
+      The response should:
+      - Cite `RULE-GO-12` by ID.
+      - State that scan queries are deprecated and that the Query Service
+        streams result sets without the 1000-row Table Service cap, so
+        switching to a scan was not necessary to solve the cap problem.
+      - Name at least two concrete costs of the scan: no prepared
+        statements so the query recompiles on every call, no automatic
+        SDK retries, the 10-minute duration cap, in-memory sorting that
+        fails out-of-resources, MapJoin-only joins, no point-read
+        optimization, or contention for shared cluster resources.
+      - Recommend rewriting the read through `db.Query().Do(...)` with
+        `s.Query(ctx, ...)` and `query.WithParameters(...)`, and note that
+        `query.WithIdempotent()` is appropriate for this read.
+      - Not invent a different RULE-GO-XX ID.
+
+      Full fail if the response:
+      - Defends the scan query as the correct way to exceed the row cap.
+      - Only comments on style, error handling, or the missing
+        `query.WithIdempotent` without identifying the deprecated scan API.

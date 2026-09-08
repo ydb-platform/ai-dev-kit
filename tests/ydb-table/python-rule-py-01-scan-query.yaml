@@ -1,0 +1,51 @@
+description: Python audit · Scan query used for a read the Query Service can serve (RULE-PY-01)
+
+vars:
+  user_prompt: |
+    Review this Python function that exports events for our nightly job.
+
+    ```python
+    import ydb
+
+    def export_events(driver, cutoff):
+        rows = []
+        for attempt in range(5):
+            try:
+                it = driver.table_client.scan_query(
+                    "SELECT id, payload FROM events WHERE created_at > $cutoff;",
+                )
+                for result_set in it:
+                    for row in result_set.result_set.rows:
+                        rows.append(row)
+                return rows
+            except ydb.Error:
+                time.sleep(2 ** attempt)
+        raise RuntimeError("export failed")
+    ```
+
+assert:
+  - type: llm-rubric
+    value: |
+      The response should:
+      - Cite `RULE-PY-01` by ID.
+      - State that `driver.table_client.scan_query` is the deprecated
+        scan interface and that the read belongs on
+        `ydb.QuerySessionPool`.
+      - Name at least two concrete costs of the scan: no prepared
+        statements so the query recompiles on every call, no automatic
+        SDK retries, the 10-minute duration cap, in-memory sorting that
+        fails out-of-resources, MapJoin-only joins, no point-read
+        optimization, or contention for shared cluster resources.
+      - Recommend keeping the read streaming — `pool.retry_operation_sync`
+        around `with session.execute(...) as result_sets:` — rather than
+        `execute_with_retries`, which buffers the whole match.
+      - Point out that the hand-rolled `for attempt in range(5)` /
+        `time.sleep` retry loop should be deleted, because the pool
+        already retries.
+      - Not invent a different RULE-PY-XX ID.
+
+      Full fail if the response:
+      - Recommends `pool.execute_with_retries` for this unbounded read
+        without flagging that it materializes the whole result.
+      - Keeps or endorses the manual retry loop.
+      - Says the code is fine.

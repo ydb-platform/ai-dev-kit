@@ -32,12 +32,15 @@ assert:
     value: |
       The response should:
       - Cite `RULE-CPP-01` by ID.
-      - Identify that `ExecuteDataQuery` with an unbounded range read
-        and no `Truncated()` check, no keyset pagination, and no
-        `StreamExecuteScanQuery` cannot exhaust the full match.
-      - Recommend a structural fix: keyset pagination, Query Service
-        streaming, or `StreamExecuteScanQuery`.
+      - Identify that `ExecuteDataQuery` with an unbounded range read,
+        no `Truncated()` check and no keyset pagination cannot exhaust
+        the full match.
+      - Recommend a structural fix: Query Service streaming
+        (`StreamExecuteQuery`) or keyset pagination.
       - Not invent a different RULE-CPP-XX ID.
 
-      Full fail if the response says the code is fine or blames only
-      network latency without addressing result-set truncation.
+      Full fail if the response:
+      - Says the code is fine or blames only network latency without
+        addressing result-set truncation.
+      - Recommends `StreamExecuteScanQuery` as the fix — scan queries are
+        deprecated (RULE-CPP-12).

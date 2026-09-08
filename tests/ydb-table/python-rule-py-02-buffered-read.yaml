@@ -1,0 +1,44 @@
+description: Python audit · execute_with_retries used for an unbounded read (RULE-PY-02)
+
+vars:
+  user_prompt: |
+    We migrated this off `scan_query` last week as part of the deprecation
+    cleanup. Does it look right now?
+
+    ```python
+    import ydb
+
+    def export_events(pool):
+        result_sets = pool.execute_with_retries(
+            "SELECT id, payload FROM events;"
+        )
+        rows = []
+        for result_set in result_sets:
+            rows.extend(result_set.rows)
+        return rows
+    ```
+
+assert:
+  - type: llm-rubric
+    value: |
+      The response should:
+      - Cite `RULE-PY-02` by ID.
+      - State that `execute_with_retries` loads the entire stream into
+        memory before returning, so peak memory scales with the size of
+        the match — the migration turned a streaming read into a
+        buffering one.
+      - Explain that the failure is data-dependent: it passes on a small
+        dev dataset and exhausts memory in production, so tests on small
+        fixtures will not catch it.
+      - Recommend consuming the stream instead —
+        `pool.retry_operation_sync(callee)` with
+        `with session.execute(query) as result_sets:` inside the callable
+        — and/or keyset pagination over the primary key with bounded
+        pages, in which case `execute_with_retries` per page is fine.
+      - Not invent a different RULE-PY-XX ID.
+
+      Full fail if the response:
+      - Approves the migration as correct.
+      - Suggests reverting to `scan_query`.
+      - Treats this purely as a style issue rather than a production
+        memory failure.
