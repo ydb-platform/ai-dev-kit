@@ -121,6 +121,14 @@ Note that this annotation in the example app retries `SQLTransientException` for
 
 YDB Query Service defaults to `SerializableRW`. Conflicting transactions are detected by the server and surface as retryable `SQLRecoverableException` (`ABORTED`). For the full mode list and the consequence for application-level optimistic locking, see [`../working-with-data.md`](../working-with-data.md).
 
+## Scan query options are not a large-read fix
+
+`ydb-jdbc-driver` can route `SELECT` statements through the deprecated scan interface: `forceScanSelect=true`, plus the driver's own already-deprecated `forceQueryMode=SCAN_QUERY` and `forceScanAndBulk=true`. What scan queries cost at the YDB level is in [`../working-with-data.md`](../working-with-data.md); the JDBC-specific sting is that scans do not support prepared statements, so enabling the option recompiles every statement on that connection, and the setting is connection-wide — a flag added for one heavy report degrades unrelated queries sharing the connection.
+
+Leave those options unset and let the driver use standard query execution. When a read is large enough to be a problem, keyset-paginate it rather than switching execution mode. On the native SDK the equivalent legacy call is `Session.executeScanQuery(...)` in `ydb-sdk-table`; the replacement is `ydb-sdk-query` — a `QuerySession` from `QueryClient` running `createQuery(...)`, wrapped in `SessionRetryContext` for retries. Worked form: <https://github.com/ydb-platform/ydb-java-examples/blob/master/query-example/src/main/java/tech/ydb/example/App.java>.
+
+Source: `ydb-jdbc-driver` `jdbc/src/main/java/tech/ydb/jdbc/settings/YdbQueryProperties.java`.
+
 ## Connection
 
 See [`../../../ydb-core/SKILL.md#connecting`](../../../ydb-core/SKILL.md#connecting).

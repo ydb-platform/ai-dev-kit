@@ -1,0 +1,52 @@
+description: C++ audit · Scan query used for a read the Query Service can serve (RULE-CPP-12)
+
+vars:
+  user_prompt: |
+    This read kept truncating, so we moved it to a scan query. Is the YDB
+    call right now?
+
+    ```cpp
+    void exportEvents(NYdb::NTable::TTableClient& client) {
+        auto it = client.StreamExecuteScanQuery(
+            "SELECT id, payload FROM events WHERE processed = false"
+        ).GetValueSync();
+        if (!it.IsSuccess()) {
+            return;
+        }
+        while (true) {
+            auto part = it.ReadNext().GetValueSync();
+            if (!part.IsSuccess()) {
+                break;
+            }
+            if (part.HasResultSet()) {
+                TResultSetParser parser(part.ExtractResultSet());
+                while (parser.TryNextRow()) {
+                    handleEvent(*parser.ColumnParser("id").GetOptionalUint64());
+                }
+            }
+        }
+    }
+    ```
+
+assert:
+  - type: llm-rubric
+    value: |
+      The response must contain the literal string `RULE-CPP-12` in the
+      first sentence, and should:
+      - Identify `StreamExecuteScanQuery` as the deprecated scan
+        interface (trigger).
+      - Give the failure mode: no prepared statements so the query
+        recompiles per call, no SDK-side retries so a transient error
+        surfaces raw, plus at least one of the 10-minute cap, in-memory
+        sorting failing out-of-resources, MapJoin-only joins, or
+        shared-resource contention starving the database.
+      - Give the fix: `NYdb::NQuery::TQueryClient::StreamExecuteQuery`
+        inside `RetryQuerySync`, reading parts with `ReadNext()`, which
+        streams without the Table Service row cap.
+      - Note that once the read sits inside a retrier, replay can re-emit
+        rows, so `handleEvent` side effects must be idempotent per key.
+      - Not invent a different RULE-CPP-XX ID.
+
+      Full fail if the response is empty, is rule-ID-only, defends the
+      scan query as the correct way to avoid truncation, or recommends
+      only adding a retry loop around the existing scan.

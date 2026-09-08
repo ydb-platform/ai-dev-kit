@@ -3,7 +3,7 @@
 Official SDK: **`ydb-cpp-sdk`** (<https://github.com/ydb-platform/ydb-cpp-sdk>), namespace `NYdb`, headers `#include <ydb-cpp-sdk/client/...>`.
 
 - **`NYdb::NQuery::TQueryClient`** — Query Service (preferred): `ExecuteQuery`, `StreamExecuteQuery`, fused `TTxControl`. Transaction modes: <https://ydb.tech/docs/en/recipes/ydb-sdk/tx-control>.
-- **`NYdb::NTable::TTableClient`** — Table Service: `ExecuteDataQuery`, `BulkUpsert`, `StreamExecuteScanQuery`, `ExecuteSchemeQuery`.
+- **`NYdb::NTable::TTableClient`** — Table Service: `ExecuteDataQuery`, `BulkUpsert`, `ExecuteSchemeQuery`. Also `StreamExecuteScanQuery`, the deprecated scan interface — see "Migrating off scan queries" below.
 - One **`NYdb::TDriver`** per process; clients are cheap on top. C++20. Docs: <https://ydb.tech/docs/en/reference/ydb-sdk/>.
 
 Connection details: [`../../../ydb-core/SKILL.md#connecting`](../../../ydb-core/SKILL.md#connecting). Production: `NYdb::CreateFromEnvironment(connectionString)` (`helpers/helpers.h`).
@@ -36,7 +36,7 @@ Use SDK retriers — not outer `for` on `RetryQuerySync` (RULE-CPP-04) and not `
 
 ## Large reads & streams
 
-- **`ExecuteDataQuery`**: check `TResultSet::Truncated()` or paginate / use `StreamExecuteScanQuery` (RULE-CPP-01).
+- **`ExecuteDataQuery`**: check `TResultSet::Truncated()`, then paginate or move the read to `StreamExecuteQuery` (RULE-CPP-01). Not `StreamExecuteScanQuery` — see below.
 - **`StreamExecuteQuery`**: wrap with `RetryQuerySync`; `ReadNext()` parts. Retrier replay can re-emit rows — dedupe side effects. RULE-CPP-09; see <https://ydb.tech/docs/en/dev/example-app/example-cpp#stream-query>.
 
 ```cpp
@@ -51,6 +51,19 @@ ThrowOnError(client.RetryQuerySync(
         return TStatus(EStatus::SUCCESS, NYdb::NIssue::TIssues());
     }));
 ```
+
+## Migrating off scan queries
+
+`TTableClient::StreamExecuteScanQuery` is the deprecated scan interface; what it costs at the YDB level is in [`../working-with-data.md`](../working-with-data.md). The replacement is `NQuery::TQueryClient::StreamExecuteQuery`, which streams without the Table Service row cap.
+
+| Legacy | Replacement |
+| --- | --- |
+| `StreamExecuteScanQuery(q, settings)` + `ReadNext()` over `TScanQueryPart` | `StreamExecuteQuery(q, TTxControl::NoTx())` + `ReadNext()` over parts, inside `RetryQuerySync` |
+| `TStreamExecScanQuerySettings` | `TExecuteQuerySettings` on the query call |
+| `TParams` passed to the scan | `TParamsBuilder` bound on `StreamExecuteQuery` — unchanged shape |
+| Hand-rolled retry loop around the scan | Delete it: `RetryQuerySync` retries `StreamExecuteQuery`, which scans never got |
+
+Both are streams, so the row-consumption loop keeps its shape. Two things change: the call now sits inside `RetryQuerySync`, so replay can re-emit rows and per-key side effects must be idempotent (RULE-CPP-09), and a `TTxControl` is now available — `TTxSettings::SnapshotRO()` matches the read-only snapshot semantics a scan gave you.
 
 ## Bulk upsert
 

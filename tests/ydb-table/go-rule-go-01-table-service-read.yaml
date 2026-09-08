@@ -50,9 +50,7 @@ assert:
         truncated result surfaces as a non-retryable error. It is
         acceptable to also note that passing `ydb.WithIgnoreTruncated` to
         the driver restores v2-style silent truncation where the call
-        returns `err == nil` with the excess rows dropped. (Scan queries
-        via `s.StreamExecuteScanQuery` are the streaming path for large
-        result sets and are not the target of this rule.)
+        returns `err == nil` with the excess rows dropped.
       - Explain the consequence specifically in the billing context: the
         function works in dev with a small data set, but in production once
         the match exceeds 1000 it either errors out and stops billing or —
@@ -71,6 +69,9 @@ assert:
       - Only suggests adding an explicit `LIMIT` clause without an outer
         pagination loop.
       - Recommends `ydb.WithIgnoreTruncated` or "raising the cap" as a fix.
+      - Recommends `s.StreamExecuteScanQuery` as the fix — scan queries
+        are deprecated (RULE-GO-12); the Query Service is the streaming
+        path.
       - Treats the issue as performance / memory rather than as a
         correctness bug.
       - Defends the code as correct on the grounds that "Table Service

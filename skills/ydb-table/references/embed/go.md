@@ -131,6 +131,35 @@ for {
 
 Canonical upstream form with a compound primary key and a helper function: <https://github.com/ydb-platform/ydb-go-sdk/blob/master/examples/pagination/main.go>.
 
+## Migrating off scan queries
+
+`s.StreamExecuteScanQuery(...)` on a `table.Session` is the deprecated scan interface; what it costs at the YDB level is in [`../working-with-data.md`](../working-with-data.md). The replacement is the Query Service, which streams without the Table Service 1000-row cap — so the usual reason for reaching at a scan disappears.
+
+| Legacy | Replacement |
+| --- | --- |
+| `db.Table().Do(...)` + `s.StreamExecuteScanQuery(ctx, sql, params, opts...)` | `db.Query().Do(...)` + `s.Query(ctx, sql, query.WithParameters(...))` |
+| `options.WithExecuteScanQueryMode(...)` / `options.ExecuteScanQueryOption` | drop — nothing equivalent is needed |
+| `ydb.WithQueryMode(ctx, ydb.ScanQueryMode)` on `database/sql` | drop the mode; the connector's Query Service path already streams |
+| `query_mode=scan` (legacy `go_query_mode=scan`) in the DSN | remove the parameter |
+| `ydb.WithDefaultScanQueryOptions(...)` on the connector | drop |
+| Hand-rolled retry loop around the scan | delete it — `Do` retries, which scans never got |
+
+```go
+err := db.Query().Do(ctx, func(ctx context.Context, s query.Session) error {
+    res, err := s.Query(ctx,
+        `SELECT id, payload FROM events WHERE created_at > $cutoff;`,
+        query.WithParameters(ydb.ParamsBuilder().
+            Param("$cutoff").Timestamp(cutoff).Build()),
+    )
+    if err != nil { return err }
+    defer func() { _ = res.Close(ctx) }()
+    // iterate result sets / rows exactly as the scan loop did
+    return nil
+}, query.WithIdempotent())
+```
+
+Two things change beyond the call itself. The read now sits in a retry unit, so `Do` may replay it — build values in locals and assign outward only on success, per `Query execution` above. And because the whole read is one retry unit, a transient failure mid-stream replays it from the top; when the match is large enough that re-reading it is unacceptable, use the keyset loop from `Long scans / resumable reads` so each batch retries independently.
+
 ## Bulk upsert
 
 Use `db.Table().BulkUpsert(ctx, tablePath, rows)` for non-transactional ingest:

@@ -23,7 +23,7 @@ One primary rule per question. **Mis-routing fails:** `INSERT INTO` + `.Idempote
 
 | If you see… | Rule | Not |
 |-------------|------|-----|
-| Unbounded `ExecuteDataQuery`, no `Truncated()` / pagination / scan stream | **RULE-CPP-01** | |
+| Unbounded `ExecuteDataQuery`, no `Truncated()` / pagination / Query stream | **RULE-CPP-01** | |
 | `push_back` / outer mutation inside `RetryQuerySync` over `ExecuteQuery` | **RULE-CPP-02** | CPP-09 |
 | `StreamExecuteQuery` + `chargeCustomer` without dedupe | **RULE-CPP-09** | CPP-02 |
 | Missing/wrong `.Idempotent(true)` on retrier | **RULE-CPP-03** | |
@@ -34,6 +34,7 @@ One primary rule per question. **Mis-routing fails:** `INSERT INTO` + `.Idempote
 | String-built YQL | **RULE-CPP-07** | |
 | `BeginTransaction` + `Commit` for one statement | **RULE-CPP-08** | |
 | `ExecuteSchemeQuery` / `CREATE TABLE` in retrier lambda | **RULE-CPP-11** | |
+| `StreamExecuteScanQuery` / `TStreamExecScanQuerySettings` anywhere | **RULE-CPP-12** | |
 
 **Idempotency:** reads & client-keyed `UPSERT` → `.Idempotent(true)`; `balance + delta` / unguarded `INSERT` → no flag (`INSERT` + flag → CPP-10).
 
@@ -41,13 +42,13 @@ One primary rule per question. **Mis-routing fails:** `INSERT INTO` + `.Idempote
 
 ### RULE-CPP-01: Unbounded Table `ExecuteDataQuery` without pagination
 
-**Severity**: Critical | **Opener**: `RULE-CPP-01` — unbounded `ExecuteDataQuery` without `Truncated()` / pagination / `StreamExecuteScanQuery` cannot exhaust the full match.
+**Severity**: Critical | **Opener**: `RULE-CPP-01` — unbounded `ExecuteDataQuery` without `Truncated()` / pagination / Query streaming cannot exhaust the full match.
 
-**What to look for**: range/filter `SELECT` + row loop, no truncation check, no keyset loop, no scan stream.
+**What to look for**: range/filter `SELECT` + row loop, no truncation check, no keyset loop, no Query stream.
 
 **Problem**: result cap cuts off the match; dev hides it, prod under-processes.
 
-**Fix**: keyset pagination (<https://ydb.tech/docs/en/dev/paging>), `StreamExecuteScanQuery`, or Query `StreamExecuteQuery`.
+**Fix**: Query `StreamExecuteQuery`, or keyset pagination (<https://ydb.tech/docs/en/dev/paging>). Not `StreamExecuteScanQuery` — it clears the cap but is the deprecated scan interface (RULE-CPP-12).
 
 **Source**: <https://ydb.tech/docs/en/dev/paging>; `TResultSet::Truncated()`.
 
@@ -170,3 +171,15 @@ One primary rule per question. **Mis-routing fails:** `INSERT INTO` + `.Idempote
 **Fix**: DDL at startup/migration; retrier lambda DML-only.
 
 **Source**: <https://ydb.tech/docs/en/reference/ydb-sdk/error_handling>.
+
+### RULE-CPP-12: Scan query used for a read the Query Service can serve
+
+**Severity**: Medium | **Opener**: `RULE-CPP-12` — `StreamExecuteScanQuery` is the deprecated scan interface; `NQuery::TQueryClient::StreamExecuteQuery` serves the same read without a row cap.
+
+**What to look for**: `TTableClient::StreamExecuteScanQuery(...)`, `TStreamExecScanQuerySettings`, `TAsyncScanQueryPartIterator` / `TScanQueryPartIterator`, `TScanQueryPart`.
+
+**Problem**: no prepared statements — recompiled per call; SDK does not retry scans, so a wrapping `RetryQuerySync` buys nothing; 10-minute duration cap; sorting runs in memory and dies out-of-resources; joins are MapJoin-only, so the right table must fit in a few GB; no point-read optimization. Competes for the same CPU/memory/disk/network as production traffic.
+
+**Fix**: `NQuery::TQueryClient::StreamExecuteQuery` inside `RetryQuerySync`, `ReadNext()` over parts — it streams with no row cap, so the reason for the scan is gone. Dedupe side effects per key, since retrier replay re-emits rows (RULE-CPP-09). For an unbounded match, keyset-paginate so each batch is its own retry scope. Analytical workload → column-oriented table, not a scan over a row-oriented one.
+
+**Source**: <https://ydb.tech/docs/en/concepts/query_execution/scan_query>; `ydb-cpp-sdk` `include/ydb-cpp-sdk/client/table/table.h` (`StreamExecuteScanQuery`), `include/ydb-cpp-sdk/client/query/client.h` (`StreamExecuteQuery`).

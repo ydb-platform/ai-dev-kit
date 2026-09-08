@@ -150,3 +150,15 @@ public void insertBatch(List<Token> batch) {
 ```
 
 **Source**: `java.sql.SQLRecoverableException`, `SQLTransientException` — <https://docs.oracle.com/en/java/javase/21/docs/api/java.sql/java/sql/SQLException.html>. Example meta-annotation pattern: <https://github.com/ydb-platform/ydb-java-examples/tree/master/jdbc/ydb-token-app>.
+
+### RULE-JV-07: Scan query forced for reads
+
+**Severity**: Medium
+
+**What to look for**: on the JDBC surface — `forceScanSelect=true` in the connection URL or properties, plus the two options the driver itself has already deprecated, `forceQueryMode=SCAN_QUERY` and `forceScanAndBulk=true`. On the native SDK surface — `session.executeScanQuery(...)`, `session.executeScanQueryRaw(...)`, or an `ExecuteScanQuerySettings` builder. Any of these in new code, or in code being modified, is the target.
+
+**Problem**: these options route `SELECT` statements through the deprecated Table Service scan interface. Upstream marks the functionality deprecated and directs new code at standard query execution. The usual motive is dodging the Table Service row cap on a large read, but standard execution clears that cap without what a scan costs: prepared statements are unsupported, so each call recompiles the query — on the JDBC surface that quietly defeats `PreparedStatement` plan reuse for every statement on the connection; scans are not retried by the SDK, so a transient failure arrives as a raw error instead of one the driver's retry classification can act on; query duration is capped at 10 minutes; sorting and other operations run entirely in memory and fail out-of-resources on complex queries; joins support only the MapJoin strategy, so the right-hand table must fit in a few gigabytes; and point or small-range reads get no optimization. Because `forceScanSelect` is connection-wide, a flag added for one heavy report degrades every unrelated `SELECT` sharing that connection.
+
+**Fix**: drop the option and let the driver use standard query execution. If the read was forced to a scan because it returned too many rows, restructure the read instead — keyset-paginate over the primary key so each page is bounded and independently retryable. On the native SDK, replace `session.executeScanQuery(...)` with the query service module (`ydb-sdk-query`): obtain a `QuerySession` from `QueryClient` and run `createQuery(...)`, wrapped in `SessionRetryContext` for retries. For a genuinely analytical workload, a column-oriented table is the durable answer rather than a scan over a row-oriented one.
+
+**Source**: <https://ydb.tech/docs/en/concepts/query_execution/scan_query>; `ydb-jdbc-driver` `jdbc/src/main/java/tech/ydb/jdbc/settings/YdbQueryProperties.java` (`forceScanSelect`, deprecated `forceQueryMode` / `forceScanAndBulk`); `ydb-java-sdk` `table/src/main/java/tech/ydb/table/Session.java` (`executeScanQuery`).

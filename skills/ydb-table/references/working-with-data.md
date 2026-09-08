@@ -90,6 +90,26 @@ NULL in primary-key columns is discouraged: tuple comparison with NULL is undefi
 
 Source: <https://ydb.tech/docs/en/dev/paging>.
 
+## Reading many rows: scan queries are not the answer
+
+`ScanQuery` is a separate read-only execution interface. It streams results over gRPC with no row-count cap, which makes it look like the obvious fit for "read everything" — and historically it was the documented way around the result cap on the older execution path. **It is deprecated**: upstream marks the functionality deprecated and directs new code at standard query execution. Do not introduce it, and treat an existing use as something to migrate.
+
+The cap is not a reason to keep it — standard query execution streams result sets without that cap too, so the problem `ScanQuery` was solving no longer exists. What it still costs:
+
+- Prepared statements are unsupported: the query is compiled on **every** call, so there is no plan-cache reuse.
+- Scans are not retried automatically; a transient failure surfaces raw to the caller, and a surrounding retry helper does nothing for it.
+- Query duration is capped at 10 minutes.
+- Many operations, sorting among them, run entirely in memory, so complex queries fail with an out-of-resources error.
+- Joins support only the *MapJoin* (broadcast) strategy, so the right-hand table must fit in a few gigabytes.
+- There are no optimizations for point reads or small-range reads.
+- A scan consumes the same shared CPU, memory, disk and network as everything else. Upstream is explicit that heavy scans **may cause resource starvation**, which degrades the whole database rather than just the scanning client.
+
+Migrate by moving the read to standard query execution and keeping the streaming shape — a stream stays a stream, so the row-consumption loop survives the change. The read then sits inside a retry unit, which brings two consequences: replay can re-emit rows, so per-key side effects must be idempotent, and a mid-stream failure replays the whole read. When re-reading the match is unacceptable, combine it with the keyset recipe above so each batch is its own retry scope.
+
+For a genuinely analytical workload the durable answer is a [column-oriented table](https://ydb.tech/docs/en/concepts/datamodel/table#column-oriented-tables) rather than a scan over a row-oriented one: column storage reads only the columns the query touches.
+
+Source: <https://ydb.tech/docs/en/concepts/query_execution/scan_query>.
+
 ## Related
 
 - [`../../ydb-core/SKILL.md#schema-basics`](../../ydb-core/SKILL.md#schema-basics) — primary-key shape and partitioning determine batch-ingest efficiency and transaction-conflict locality.
