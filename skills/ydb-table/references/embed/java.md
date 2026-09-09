@@ -117,26 +117,38 @@ public void loadData(int firstID, int lastID) {
 
 Note that this annotation in the example app retries `SQLTransientException` for *all* annotated methods, which is only safe because every annotated operation there is idempotent. In your own code, restrict the non-`SQLRecoverableException` catch to methods you know are idempotent.
 
-## Native Query SDK deadline and cancellation
+## Native Query SDK deadline and retry cancellation
 
-For `tech.ydb:ydb-sdk-query`, build `ExecuteQuerySettings` with the caller's remaining budget and cancel the `QueryStream` itself when the caller no longer needs the result:
+For `tech.ydb:ydb-sdk-query`, bound every `ExecuteQuery` attempt with the caller's remaining budget. If `SessionRetryContext` owns retries, cancel the future returned by the retry context when the caller no longer needs the result:
 
 ```java
-ExecuteQuerySettings settings = ExecuteQuerySettings.newBuilder()
-        .withRequestTimeout(remainingBudget)
+Duration initialBudget = Duration.between(Instant.now(), callerDeadline);
+// Reject the request before building the retry context if initialBudget <= 0.
+SessionRetryContext retryContext = SessionRetryContext.create(client)
+        .sessionCreationTimeout(initialBudget)
+        .maxRetries(3)
+        .idempotent(true)
         .build();
 
-QueryStream stream = session.createQuery(
-        query, TxMode.SNAPSHOT_RO, params, settings);
-CompletableFuture<Result<QueryInfo>> result = stream.execute(this::onPart);
-requestCancelled.thenRun(stream::cancel);
+CompletableFuture<Result<QueryInfo>> operation = retryContext.supplyResult(session -> {
+    Duration remainingBudget = Duration.between(Instant.now(), callerDeadline);
+    // Return a deadline-expired result without dispatching if remainingBudget <= 0.
+    ExecuteQuerySettings settings = ExecuteQuerySettings.newBuilder()
+            .withRequestTimeout(remainingBudget)
+            .build();
+
+    return session.createQuery(query, TxMode.SNAPSHOT_RO, params, settings)
+            .execute(this::onPart);
+});
+
+requestCancelled.thenRun(() -> operation.cancel(false));
 ```
 
-`withRequestTimeout` becomes the transport deadline. When retrying, recompute the remaining duration from the original caller deadline; giving each attempt the original full duration silently multiplies the request budget. An inbound gRPC deadline is also visible through the current `io.grpc.Context`, so do not detach the SDK call onto `Context.ROOT` or an executor that loses the caller context.
+`withRequestTimeout` becomes the transport deadline for the current query attempt. Recompute it from the original caller deadline inside the retry callback; giving every attempt a fresh full duration silently multiplies the request budget.
 
-Cancelling the returned `CompletableFuture` is not the documented stream-cancellation API. `QueryStream.cancel()` cancels the underlying read stream; the server is informed but may not stop processing, so cancellation is not proof of rollback.
+The `operation` future belongs to `SessionRetryContext`. The retry context checks `promise.isCancelled()` before scheduling a retry and again when the retry timer fires, so this outer future is the cancellation handle for retry orchestration. Cancelling it does **not** cancel an already running `ExecuteQuery`; the request timeout remains responsible for bounding that attempt. Do not add cancellation of the inner `ExecuteQuery` future to this pattern: it is normally unnecessary and is not a substitute for cancelling the outer retry future.
 
-Source: <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/QueryStream.java> — `cancel`; <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/settings/ExecuteQuerySettings.java> and <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/impl/SessionImpl.java> — request timeout mapping to the gRPC deadline; <https://github.com/ydb-platform/ydb-java-sdk/blob/master/core/src/main/java/tech/ydb/core/impl/BaseGrpcTransport.java> — request deadlines and current gRPC context; <https://github.com/ydb-platform/ydb-java-sdk/blob/master/core/src/main/java/tech/ydb/core/grpc/GrpcReadStream.java> — cancellation semantics.
+Source: <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/tools/SessionRetryContext.java> — cancellation checks before subsequent retries; <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/settings/ExecuteQuerySettings.java> and <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/impl/SessionImpl.java> — request timeout mapping to the gRPC deadline.
 
 ## Transactions
 

@@ -151,14 +151,14 @@ public void insertBatch(List<Token> batch) {
 
 **Source**: `java.sql.SQLRecoverableException`, `SQLTransientException` — <https://docs.oracle.com/en/java/javase/21/docs/api/java.sql/java/sql/SQLException.html>. Example meta-annotation pattern: <https://github.com/ydb-platform/ydb-java-examples/tree/master/jdbc/ydb-token-app>.
 
-### RULE-JV-07: Native query stream detached from caller deadline or cancellation
+### RULE-JV-07: Session retry context detached from caller cancellation or query deadline
 
 **Severity**: High
 
-**What to look for**: native Query SDK request code that has a caller deadline but builds `ExecuteQuerySettings` without `.withRequestTimeout(remainingBudget)`; starts YDB work from `Context.ROOT` or an executor that loses the inbound `io.grpc.Context`; or reacts to caller cancellation only with `CompletableFuture.cancel(...)` and never calls `QueryStream.cancel()`.
+**What to look for**: code using `SessionRetryContext.supplyResult(...)` or `.supplyStatus(...)` where the returned retry future is not cancelled when the caller goes away; or where an `ExecuteQuery` inside the retry callback has no `.withRequestTimeout(remainingBudget)`, uses a fixed timeout that can exceed the caller deadline, or receives a fresh full timeout on every retry.
 
-**Problem**: the request can keep acquiring a session, retrying, executing, or consuming stream parts after its caller has gone away. A fresh full timeout on each attempt multiplies the caller's latency budget. Cancelling only the returned future is not the Query Service stream cancellation API and does not express cancellation to the underlying read stream.
+**Problem**: an uncancelled `SessionRetryContext` can keep scheduling attempts after the caller no longer needs a result. An unbounded or freshly reset request timeout can also let the current `ExecuteQuery` outlive the caller's deadline.
 
-**Fix**: derive `.withRequestTimeout(...)` from the original caller deadline's remaining duration for every attempt, preserve the inbound gRPC context while starting the SDK call when one exists, and register caller cancellation to invoke `QueryStream.cancel()`. Stream cancellation informs the server but may not stop processing, so it does not prove rollback; preserve the operation's idempotency and uncertain-result handling.
+**Fix**: retain the future returned by `SessionRetryContext` and cancel that outer future when the caller cancels. The retry context checks this cancellation before scheduling a retry and when its timer fires. Inside the retry callback, recompute the remaining duration from the original caller deadline and pass it to `.withRequestTimeout(...)`. Cancelling the retry future does not cancel an already running `ExecuteQuery`; its request timeout bounds that attempt. Cancelling the inner query future is normally unnecessary. Preserve the operation's idempotency and uncertain-result handling.
 
-**Source**: <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/QueryStream.java> — `cancel`; <https://github.com/ydb-platform/ydb-java-sdk/blob/master/core/src/main/java/tech/ydb/core/impl/BaseGrpcTransport.java> — request deadline and current gRPC context; <https://github.com/ydb-platform/ydb-java-sdk/blob/master/core/src/main/java/tech/ydb/core/grpc/GrpcReadStream.java> — cancellation informs the server but may not stop processing.
+**Source**: <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/tools/SessionRetryContext.java> — cancellation checks before retries; <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/settings/ExecuteQuerySettings.java> and <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/impl/SessionImpl.java> — request timeout mapping to the gRPC deadline.
