@@ -117,6 +117,39 @@ public void loadData(int firstID, int lastID) {
 
 Note that this annotation in the example app retries `SQLTransientException` for *all* annotated methods, which is only safe because every annotated operation there is idempotent. In your own code, restrict the non-`SQLRecoverableException` catch to methods you know are idempotent.
 
+## Native Query SDK deadline and retry cancellation
+
+For `tech.ydb:ydb-sdk-query`, bound every `ExecuteQuery` attempt with the caller's remaining budget. If `SessionRetryContext` owns retries, cancel the future returned by the retry context when the caller no longer needs the result:
+
+```java
+Duration initialBudget = Duration.between(Instant.now(), callerDeadline);
+// Reject the request before building the retry context if initialBudget <= 0.
+SessionRetryContext retryContext = SessionRetryContext.create(client)
+        .sessionCreationTimeout(initialBudget)
+        .maxRetries(3)
+        .idempotent(true)
+        .build();
+
+CompletableFuture<Result<QueryInfo>> operation = retryContext.supplyResult(session -> {
+    Duration remainingBudget = Duration.between(Instant.now(), callerDeadline);
+    // Return a deadline-expired result without dispatching if remainingBudget <= 0.
+    ExecuteQuerySettings settings = ExecuteQuerySettings.newBuilder()
+            .withRequestTimeout(remainingBudget)
+            .build();
+
+    return session.createQuery(query, TxMode.SNAPSHOT_RO, params, settings)
+            .execute(this::onPart);
+});
+
+requestCancelled.thenRun(() -> operation.cancel(false));
+```
+
+`withRequestTimeout` becomes the transport deadline for the current query attempt. Recompute it from the original caller deadline inside the retry callback; giving every attempt a fresh full duration silently multiplies the request budget.
+
+The `operation` future belongs to `SessionRetryContext`. The retry context checks `promise.isCancelled()` before scheduling a retry and again when the retry timer fires, so this outer future is the cancellation handle for retry orchestration. Cancelling it does **not** cancel an already running `ExecuteQuery`; the request timeout remains responsible for bounding that attempt. Do not add cancellation of the inner `ExecuteQuery` future to this pattern: it is normally unnecessary and is not a substitute for cancelling the outer retry future.
+
+Source: <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/tools/SessionRetryContext.java> — cancellation checks before subsequent retries; <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/settings/ExecuteQuerySettings.java> and <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/impl/SessionImpl.java> — request timeout mapping to the gRPC deadline.
+
 ## Transactions
 
 YDB Query Service defaults to `SerializableRW`. Conflicting transactions are detected by the server and surface as retryable `SQLRecoverableException` (`ABORTED`). For the full mode list and the consequence for application-level optimistic locking, see [`../working-with-data.md`](../working-with-data.md).

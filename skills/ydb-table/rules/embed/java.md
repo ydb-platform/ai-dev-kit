@@ -150,3 +150,15 @@ public void insertBatch(List<Token> batch) {
 ```
 
 **Source**: `java.sql.SQLRecoverableException`, `SQLTransientException` — <https://docs.oracle.com/en/java/javase/21/docs/api/java.sql/java/sql/SQLException.html>. Example meta-annotation pattern: <https://github.com/ydb-platform/ydb-java-examples/tree/master/jdbc/ydb-token-app>.
+
+### RULE-JV-07: Session retry context detached from caller cancellation or query deadline
+
+**Severity**: High
+
+**What to look for**: code using `SessionRetryContext.supplyResult(...)` or `.supplyStatus(...)` where the returned retry future is not cancelled when the caller goes away; or where an `ExecuteQuery` inside the retry callback has no `.withRequestTimeout(remainingBudget)`, uses a fixed timeout that can exceed the caller deadline, or receives a fresh full timeout on every retry.
+
+**Problem**: an uncancelled `SessionRetryContext` can keep scheduling attempts after the caller no longer needs a result. An unbounded or freshly reset request timeout can also let the current `ExecuteQuery` outlive the caller's deadline.
+
+**Fix**: retain the future returned by `SessionRetryContext` and cancel that outer future when the caller cancels. The retry context checks this cancellation before scheduling a retry and when its timer fires. Inside the retry callback, recompute the remaining duration from the original caller deadline and pass it to `.withRequestTimeout(...)`. Cancelling the retry future does not cancel an already running `ExecuteQuery`; its request timeout bounds that attempt. Cancelling the inner query future is normally unnecessary. Preserve the operation's idempotency and uncertain-result handling.
+
+**Source**: <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/tools/SessionRetryContext.java> — cancellation checks before retries; <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/settings/ExecuteQuerySettings.java> and <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/impl/SessionImpl.java> — request timeout mapping to the gRPC deadline.

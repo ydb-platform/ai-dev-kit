@@ -39,6 +39,31 @@ Three load-bearing pieces:
 
 Source: <https://github.com/ydb-platform/ydb-go-sdk> README "Example Usage".
 
+## Request deadline and cancellation
+
+Derive the YDB operation context from the caller's context. `context.WithTimeout` keeps an earlier parent deadline, so the same budget covers pool/session acquisition, retry backoff, every attempt, the RPC, and stream draining. Inside `Do` / `DoTx`, use the context passed to the callback; it is the SDK's per-attempt context.
+
+```go
+func loadUser(requestCtx context.Context, db *ydb.Driver, id uint64) error {
+    opCtx, cancel := context.WithTimeout(requestCtx, maxYDBDuration)
+    defer cancel()
+
+    return db.Query().Do(opCtx, func(ctx context.Context, s query.Session) error {
+        res, err := s.Query(ctx,
+            `SELECT name FROM users WHERE id = $id`,
+            query.WithParameters(ydb.ParamsBuilder().
+                Param("$id").Uint64(id).Build()),
+        )
+        if err != nil { return err }
+        return res.Close(ctx)
+    }, query.WithIdempotent())
+}
+```
+
+Do not replace `requestCtx` with `context.Background()` / `context.TODO()`, and do not create a new full timeout inside the retry callback: both detach or reset the caller's budget. Context cancellation stops the client work best-effort; it does not prove that an already-sent write was rolled back, so the idempotency contract still applies.
+
+Source: <https://github.com/ydb-platform/ydb-go-sdk/blob/master/query/example_test.go> — the `Do` callback uses its context for `s.Query`; <https://pkg.go.dev/context#WithTimeout> — derived contexts inherit parent cancellation and deadlines.
+
 ## Query stats (`WithStatsMode`)
 
 `query.WithStatsMode(mode, callback)` attaches a per-query stats handler. The handler may run **more than once** as the SDK receives stream parts. Stats-bearing parts are not guaranteed to arrive first; row data can arrive earlier, and the final stats snapshot may appear only after additional `Recv` calls while draining.

@@ -34,6 +34,7 @@ One primary rule per question. **Mis-routing fails:** `INSERT INTO` + `.Idempote
 | String-built YQL | **RULE-CPP-07** | |
 | `BeginTransaction` + `Commit` for one statement | **RULE-CPP-08** | |
 | `ExecuteSchemeQuery` / `CREATE TABLE` in retrier lambda | **RULE-CPP-11** | |
+| Caller stop/deadline ignored by retry or query settings | **RULE-CPP-12** | CPP-03 |
 
 **Idempotency:** reads & client-keyed `UPSERT` → `.Idempotent(true)`; `balance + delta` / unguarded `INSERT` → no flag (`INSERT` + flag → CPP-10).
 
@@ -170,3 +171,15 @@ One primary rule per question. **Mis-routing fails:** `INSERT INTO` + `.Idempote
 **Fix**: DDL at startup/migration; retrier lambda DML-only.
 
 **Source**: <https://ydb.tech/docs/en/reference/ydb-sdk/error_handling>.
+
+### RULE-CPP-12: Caller stop and deadline omitted from retry settings
+
+**Severity**: High | **Opener**: `RULE-CPP-12` — pass the caller stop token and remaining deadline through `TRetryOperationSettings` and the request settings instead of giving YDB a detached fixed budget.
+
+**What to look for**: a handler receives a `std::stop_token` or caller deadline, but `RetryQuerySync`, `RetryOperationSync`, or unary retry settings omit `.CancellationToken(token)`; request settings omit `.Deadline(callerDeadline)`; fixed `MaxTimeout` / `ClientTimeout` values ignore a shorter caller deadline; or every attempt receives a fresh full timeout. This is not RULE-CPP-03 unless the idempotency declaration itself is wrong.
+
+**Problem**: the SDK can continue session work, backoff, retries, or an RPC after the caller has disconnected or its deadline has expired. Resetting the timeout per attempt multiplies the intended end-to-end budget and holds client/server resources for work nobody needs.
+
+**Fix**: set `TRetryOperationSettings().CancellationToken(requestStop).MaxTimeout(remainingBudget)` and bound the request with `.Deadline(callerDeadline).ClientTimeout(remainingBudget)`; recompute `remainingBudget` from the original caller deadline. `CancellationToken` stops retry orchestration but does not cancel an already running RPC; `CLIENT_CANCELLED` may replace a successful result and does not imply rollback, so retain the RPC timeout and correct idempotency setting.
+
+**Source**: <https://github.com/ydb-platform/ydb/blob/main/ydb/public/sdk/cpp/include/ydb-cpp-sdk/client/retry/retry.h> — released `TRetryOperationSettings::CancellationToken` contract; <https://github.com/ydb-platform/ydb/blob/main/ydb/public/sdk/cpp/include/ydb-cpp-sdk/client/types/request_settings.h> — absolute `Deadline`; <https://ydb.tech/docs/en/dev/timeouts> — timeout layers.

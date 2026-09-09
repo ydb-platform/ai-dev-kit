@@ -34,6 +34,30 @@ Single statement: `TTxControl::BeginTx(TTxSettings::SerializableRW()).CommitTx()
 
 Use SDK retriers — not outer `for` on `RetryQuerySync` (RULE-CPP-04) and not `sleep_for` + bare `ExecuteQuery` (RULE-CPP-05). Status classes: always-retry (`ABORTED`, `UNAVAILABLE`, `BAD_SESSION`); conditional with `.Idempotent(true)` (`UNDETERMINED`, `TRANSPORT_UNAVAILABLE`); non-retryable (`PRECONDITION_FAILED`, `SCHEME_ERROR`). Tune via `TRetryOperationSettings`. Source: <https://ydb.tech/docs/en/recipes/ydb-sdk/retry>, <https://ydb.tech/docs/en/reference/ydb-sdk/ydb-status-codes>.
 
+## Request deadline and cancellation
+
+Pass the caller's absolute deadline to the request, its remaining time to retry orchestration, and its `std::stop_token` to the retry settings:
+
+```cpp
+auto retrySettings = NYdb::NRetry::TRetryOperationSettings()
+    .MaxTimeout(remainingBudget)
+    .CancellationToken(requestStop)
+    .Idempotent(true);
+
+auto settings = NYdb::NQuery::TExecuteQuerySettings()
+    .Deadline(callerDeadline)
+    .ClientTimeout(remainingBudget)
+    .RetrySettings(retrySettings);
+
+auto result = client.ExecuteQuery(query, txControl, params, settings).GetValueSync();
+```
+
+`Deadline` preserves the caller's absolute boundary even if dispatch is delayed; `MaxTimeout` caps the whole retry orchestration; `ClientTimeout` supplies the per-RPC cap. Compute relative limits from the caller's *remaining* budget rather than resetting a fixed duration for each attempt. The SDK applies the earlier of `Deadline` and `ClientTimeout` to the RPC.
+
+`CancellationToken` stops retry orchestration, including before an attempt or during backoff, but it does **not** cancel an already running RPC. `CLIENT_CANCELLED` may replace a successful result and does not imply rollback. Keep `ClientTimeout` and the operation's idempotency semantics even when a stop token is present.
+
+Source: <https://github.com/ydb-platform/ydb/blob/main/ydb/public/sdk/cpp/include/ydb-cpp-sdk/client/retry/retry.h> — released `TRetryOperationSettings::CancellationToken` contract; <https://github.com/ydb-platform/ydb/blob/main/ydb/public/sdk/cpp/include/ydb-cpp-sdk/client/types/request_settings.h> and <https://github.com/ydb-platform/ydb/blob/main/ydb/public/sdk/cpp/src/client/impl/internal/rpc_request_settings/settings.h> — absolute request deadline and its combination with `ClientTimeout`; <https://ydb.tech/docs/en/dev/timeouts> — operation, transport, and cancel-after timeout layers.
+
 ## Large reads & streams
 
 - **`ExecuteDataQuery`**: check `TResultSet::Truncated()` or paginate / use `StreamExecuteScanQuery` (RULE-CPP-01).

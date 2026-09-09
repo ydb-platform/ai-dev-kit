@@ -24,13 +24,15 @@ Non-idempotent writes (counter increment, unkeyed `INSERT`) must not carry the i
 
 No hand-rolled retry loops with fixed sleeps. They replay non-retryable errors, burn budget, and replay conditional failures without the idempotency gate (can double-apply non-idempotent writes).
 
-## Timeouts
+## Deadlines and cancellation
 
 Docs: <https://ydb.tech/docs/en/dev/timeouts>. Multiple timeouts (operation, transport, cancel-after); set all.
 
-Per-call timeout sizing: `min(caller-deadline, 2-3 × p99_normal)` for that specific query. Tighter starts firing on requests that would have succeeded under stress (rolling restart, drill entry) and amplifies load via retries; looser keeps in-flight requests alive after the caller stopped caring, holding pool slots.
+Treat the upstream request deadline as one end-to-end budget. Session acquisition, retry backoff, every attempt, the RPC itself, and result-stream draining all spend from that same budget. Before starting YDB work, cap the remaining caller budget by the operation's normal service limit; never give every retry a fresh full timeout.
 
-When the application receives a deadline from upstream, forward it (deadline propagation) instead of using a fixed per-call timeout. When the request is no longer needed, cancel its context — the SDK propagates the cancel to YDB so the server aborts the in-flight gRPC call.
+Per-call timeout sizing: `min(caller deadline remaining, 2-3 × p99_normal)` for that specific query. Tighter starts firing on requests that would have succeeded under stress (rolling restart, drill entry) and amplifies load via retries; looser keeps work alive after the caller stopped caring, holding pool slots.
+
+Propagate the caller's cancellation through the SDK's request-lifecycle mechanism instead of detaching work onto a root context or an unrelated fixed timeout. Cancellation is best-effort: it can stop local retry orchestration and can notify the transport, but it is not evidence that an already-running request stopped or that a write rolled back. Keep retry and side-effect safety correct for an uncertain result.
 
 ## Warmup
 
