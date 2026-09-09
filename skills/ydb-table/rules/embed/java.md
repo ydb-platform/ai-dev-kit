@@ -150,3 +150,15 @@ public void insertBatch(List<Token> batch) {
 ```
 
 **Source**: `java.sql.SQLRecoverableException`, `SQLTransientException` — <https://docs.oracle.com/en/java/javase/21/docs/api/java.sql/java/sql/SQLException.html>. Example meta-annotation pattern: <https://github.com/ydb-platform/ydb-java-examples/tree/master/jdbc/ydb-token-app>.
+
+### RULE-JV-07: Native query stream detached from caller deadline or cancellation
+
+**Severity**: High
+
+**What to look for**: native Query SDK request code that has a caller deadline but builds `ExecuteQuerySettings` without `.withRequestTimeout(remainingBudget)`; starts YDB work from `Context.ROOT` or an executor that loses the inbound `io.grpc.Context`; or reacts to caller cancellation only with `CompletableFuture.cancel(...)` and never calls `QueryStream.cancel()`.
+
+**Problem**: the request can keep acquiring a session, retrying, executing, or consuming stream parts after its caller has gone away. A fresh full timeout on each attempt multiplies the caller's latency budget. Cancelling only the returned future is not the Query Service stream cancellation API and does not express cancellation to the underlying read stream.
+
+**Fix**: derive `.withRequestTimeout(...)` from the original caller deadline's remaining duration for every attempt, preserve the inbound gRPC context while starting the SDK call when one exists, and register caller cancellation to invoke `QueryStream.cancel()`. Stream cancellation informs the server but may not stop processing, so it does not prove rollback; preserve the operation's idempotency and uncertain-result handling.
+
+**Source**: <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/QueryStream.java> — `cancel`; <https://github.com/ydb-platform/ydb-java-sdk/blob/master/core/src/main/java/tech/ydb/core/impl/BaseGrpcTransport.java> — request deadline and current gRPC context; <https://github.com/ydb-platform/ydb-java-sdk/blob/master/core/src/main/java/tech/ydb/core/grpc/GrpcReadStream.java> — cancellation informs the server but may not stop processing.

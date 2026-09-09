@@ -117,6 +117,27 @@ public void loadData(int firstID, int lastID) {
 
 Note that this annotation in the example app retries `SQLTransientException` for *all* annotated methods, which is only safe because every annotated operation there is idempotent. In your own code, restrict the non-`SQLRecoverableException` catch to methods you know are idempotent.
 
+## Native Query SDK deadline and cancellation
+
+For `tech.ydb:ydb-sdk-query`, build `ExecuteQuerySettings` with the caller's remaining budget and cancel the `QueryStream` itself when the caller no longer needs the result:
+
+```java
+ExecuteQuerySettings settings = ExecuteQuerySettings.newBuilder()
+        .withRequestTimeout(remainingBudget)
+        .build();
+
+QueryStream stream = session.createQuery(
+        query, TxMode.SNAPSHOT_RO, params, settings);
+CompletableFuture<Result<QueryInfo>> result = stream.execute(this::onPart);
+requestCancelled.thenRun(stream::cancel);
+```
+
+`withRequestTimeout` becomes the transport deadline. When retrying, recompute the remaining duration from the original caller deadline; giving each attempt the original full duration silently multiplies the request budget. An inbound gRPC deadline is also visible through the current `io.grpc.Context`, so do not detach the SDK call onto `Context.ROOT` or an executor that loses the caller context.
+
+Cancelling the returned `CompletableFuture` is not the documented stream-cancellation API. `QueryStream.cancel()` cancels the underlying read stream; the server is informed but may not stop processing, so cancellation is not proof of rollback.
+
+Source: <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/QueryStream.java> — `cancel`; <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/settings/ExecuteQuerySettings.java> — request settings; <https://github.com/ydb-platform/ydb-java-sdk/blob/master/core/src/main/java/tech/ydb/core/impl/BaseGrpcTransport.java> — request deadlines and current gRPC context; <https://github.com/ydb-platform/ydb-java-sdk/blob/master/core/src/main/java/tech/ydb/core/grpc/GrpcReadStream.java> — cancellation semantics.
+
 ## Transactions
 
 YDB Query Service defaults to `SerializableRW`. Conflicting transactions are detected by the server and surface as retryable `SQLRecoverableException` (`ABORTED`). For the full mode list and the consequence for application-level optimistic locking, see [`../working-with-data.md`](../working-with-data.md).

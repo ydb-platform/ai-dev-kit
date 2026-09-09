@@ -193,3 +193,15 @@ For reusable helpers, keep a strict shape: run `Query` → drain (`Close` or ful
 If the call also iterates rows, draining by iteration to EOF is valid; stats may be consumed only after that iteration finishes. Calling `Close` after iteration remains a safe finalizer.
 
 **Source**: `ydb-go-sdk/v3` query result stream — stats callback from `internal/query/result.go` `nextPart` when `part.GetExecStats() != nil`; drain loop in `(*streamResult).Close`. Query stats API: <https://github.com/ydb-platform/ydb-go-sdk/blob/master/query/execute_options.go> (`WithStatsMode`).
+
+### RULE-GO-12: YDB work detached from the caller deadline or cancellation
+
+**Severity**: High
+
+**What to look for**: a request handler receives `ctx` / `requestCtx` but passes `context.Background()` or `context.TODO()` to `db.Query().Do`, `db.Table().Do`, `s.Query`, `s.Execute`, or result `Close`; a fresh `context.WithTimeout(context.Background(), ...)`; a new full timeout created inside a `Do` / `DoTx` callback; or SDK calls inside the callback that use an outer context instead of the callback's context.
+
+**Problem**: detached work survives caller disconnect and deadline expiry, continuing to wait for a session, back off, retry, execute, or drain a stream while the caller has gone away. Resetting the full timeout inside every retry attempt multiplies the intended latency budget. Cancellation is best-effort and does not prove that an already-sent write was rolled back, so losing the caller context also makes uncertain results harder to handle safely.
+
+**Fix**: derive one bounded context from the caller (`opCtx, cancel := context.WithTimeout(requestCtx, maxYDBDuration)`), `defer cancel()`, and pass `opCtx` to `Do` / `DoTx`. Inside its callback, use the callback-provided context for every session, transaction, and result-stream call. Keep `WithIdempotent` aligned with replay safety because cancellation does not change whether a write can be retried.
+
+**Source**: <https://github.com/ydb-platform/ydb-go-sdk/blob/master/query/example_test.go> — `Do` supplies the context used by `s.Query`; <https://pkg.go.dev/context#WithTimeout> — derived contexts inherit parent cancellation and deadlines.

@@ -34,6 +34,29 @@ Single statement: `TTxControl::BeginTx(TTxSettings::SerializableRW()).CommitTx()
 
 Use SDK retriers — not outer `for` on `RetryQuerySync` (RULE-CPP-04) and not `sleep_for` + bare `ExecuteQuery` (RULE-CPP-05). Status classes: always-retry (`ABORTED`, `UNAVAILABLE`, `BAD_SESSION`); conditional with `.Idempotent(true)` (`UNDETERMINED`, `TRANSPORT_UNAVAILABLE`); non-retryable (`PRECONDITION_FAILED`, `SCHEME_ERROR`). Tune via `TRetryOperationSettings`. Source: <https://ydb.tech/docs/en/recipes/ydb-sdk/retry>, <https://ydb.tech/docs/en/reference/ydb-sdk/ydb-status-codes>.
 
+## Request deadline and cancellation
+
+Pass the caller's remaining time to both the RPC and retry orchestration, and pass its `std::stop_token` to the retry settings:
+
+```cpp
+auto retrySettings = NYdb::NRetry::TRetryOperationSettings()
+    .MaxTimeout(remainingBudget)
+    .CancellationToken(requestStop)
+    .Idempotent(true);
+
+auto settings = NYdb::NQuery::TExecuteQuerySettings()
+    .ClientTimeout(remainingBudget)
+    .RetrySettings(retrySettings);
+
+auto result = client.ExecuteQuery(query, txControl, params, settings).GetValueSync();
+```
+
+`MaxTimeout` caps the whole retry orchestration; `ClientTimeout` bounds the RPC. Compute both from the caller's *remaining* budget rather than resetting a fixed duration for each attempt.
+
+`CancellationToken` stops retry orchestration, including before an attempt or during backoff, but it does **not** cancel an already running RPC. `CLIENT_CANCELLED` may replace a successful result and does not imply rollback. Keep `ClientTimeout` and the operation's idempotency semantics even when a stop token is present.
+
+Source: <https://github.com/ydb-platform/ydb/pull/52361> — `TRetryOperationSettings::CancellationToken` contract and retry tests; <https://ydb.tech/docs/en/dev/timeouts> — operation, transport, and cancel-after timeout layers.
+
 ## Large reads & streams
 
 - **`ExecuteDataQuery`**: check `TResultSet::Truncated()` or paginate / use `StreamExecuteScanQuery` (RULE-CPP-01).
