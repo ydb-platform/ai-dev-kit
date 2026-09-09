@@ -136,7 +136,7 @@ requestCancelled.thenRun(stream::cancel);
 
 Cancelling the returned `CompletableFuture` is not the documented stream-cancellation API. `QueryStream.cancel()` cancels the underlying read stream; the server is informed but may not stop processing, so cancellation is not proof of rollback.
 
-Source: <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/QueryStream.java> — `cancel`; <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/settings/ExecuteQuerySettings.java> — request settings; <https://github.com/ydb-platform/ydb-java-sdk/blob/master/core/src/main/java/tech/ydb/core/impl/BaseGrpcTransport.java> — request deadlines and current gRPC context; <https://github.com/ydb-platform/ydb-java-sdk/blob/master/core/src/main/java/tech/ydb/core/grpc/GrpcReadStream.java> — cancellation semantics.
+Source: <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/QueryStream.java> — `cancel`; <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/settings/ExecuteQuerySettings.java> and <https://github.com/ydb-platform/ydb-java-sdk/blob/master/query/src/main/java/tech/ydb/query/impl/SessionImpl.java> — request timeout mapping to the gRPC deadline; <https://github.com/ydb-platform/ydb-java-sdk/blob/master/core/src/main/java/tech/ydb/core/impl/BaseGrpcTransport.java> — request deadlines and current gRPC context; <https://github.com/ydb-platform/ydb-java-sdk/blob/master/core/src/main/java/tech/ydb/core/grpc/GrpcReadStream.java> — cancellation semantics.
 
 ## Transactions
 
