@@ -56,7 +56,7 @@ auto result = client.ExecuteQuery(query, txControl, params, settings).GetValueSy
 
 `CancellationToken` stops retry orchestration, including before an attempt or during backoff, but it does **not** cancel an already running RPC. `CLIENT_CANCELLED` may replace a successful result and does not imply rollback. Keep `ClientTimeout` and the operation's idempotency semantics even when a stop token is present.
 
-Source: <https://github.com/ydb-platform/ydb/pull/52361> — `TRetryOperationSettings::CancellationToken` contract and retry tests; <https://github.com/ydb-platform/ydb/blob/main/ydb/public/sdk/cpp/include/ydb-cpp-sdk/client/types/request_settings.h> and <https://github.com/ydb-platform/ydb/blob/main/ydb/public/sdk/cpp/src/client/impl/internal/rpc_request_settings/settings.h> — absolute request deadline and its combination with `ClientTimeout`; <https://ydb.tech/docs/en/dev/timeouts> — operation, transport, and cancel-after timeout layers.
+Source: <https://github.com/ydb-platform/ydb/blob/main/ydb/public/sdk/cpp/include/ydb-cpp-sdk/client/retry/retry.h> — released `TRetryOperationSettings::CancellationToken` contract; <https://github.com/ydb-platform/ydb/blob/main/ydb/public/sdk/cpp/include/ydb-cpp-sdk/client/types/request_settings.h> and <https://github.com/ydb-platform/ydb/blob/main/ydb/public/sdk/cpp/src/client/impl/internal/rpc_request_settings/settings.h> — absolute request deadline and its combination with `ClientTimeout`; <https://ydb.tech/docs/en/dev/timeouts> — operation, transport, and cancel-after timeout layers.
 
 ## Large reads & streams
 

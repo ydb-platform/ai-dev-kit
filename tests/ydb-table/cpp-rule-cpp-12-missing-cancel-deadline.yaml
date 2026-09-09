@@ -45,8 +45,8 @@ assert:
       - Recommend `TRetryOperationSettings().CancellationToken(requestStop)`
         plus `.Deadline(callerDeadline)` and caller-derived `MaxTimeout` and
         `ClientTimeout` values.
-      - Preserve the exact API limitation from ydb#52361: the stop token stops
-        retry orchestration but does not cancel an already running RPC;
+      - Preserve the exact SDK contract: the stop token stops retry
+        orchestration but does not cancel an already running RPC;
         `CLIENT_CANCELLED` may replace a successful result and does not imply
         rollback.
 
